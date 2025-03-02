@@ -2,113 +2,314 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>Banka ve Hacker Simülatörü</title>
+  <title>Senkranize Banka & Hacker Simülatörü</title>
   <style>
     body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    .hidden { display: none; }
+    input, button { padding: 10px; margin: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
     th { background-color: #333; color: #fff; }
-    .message { margin: 10px 0; padding: 10px; background: #e7e7e7; border-left: 5px solid #333; }
-    button { padding: 8px 16px; cursor: pointer; }
+    .form-container { background: #fff; padding: 15px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 20px; }
+    header { display: flex; justify-content: space-between; align-items: center; }
+    .message { padding: 10px; background: #e7e7e7; border-left: 5px solid #333; margin-top: 10px; }
+    /* Modal Stilleri */
+    #hackModal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); display: none;
+      align-items: center; justify-content: center;
+    }
+    #hackModal .modal-content {
+      background: #fff; padding: 20px; border-radius: 4px; width: 300px; text-align: center;
+    }
+    #hackModal button { margin: 10px; }
   </style>
+  <!-- Firebase SDK (compat sürümleri daha kolay entegrasyon için) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-  <h1>Banka ve Hacker Simülatörü</h1>
-  <p>Her hesabın başlangıç bakiyesi 1000 TL'dir. Hesaplar arasında hacklemeler yapabilirsiniz. Başarılı olursanız hedefin bakiyesinden para çalarsınız, yakalanırsanız ceza alırsınız.</p>
-  
-  <div id="accounts"></div>
-  
-  <div>
-    <label for="source">Hacke Başlayacak Hesap:</label>
-    <select id="source"></select>
-    <label for="target">Hedef Hesap:</label>
-    <select id="target"></select>
-    <button id="hackButton">Hackle!</button>
+  <header>
+    <h1>Senkranize Banka & Hacker Simülatörü</h1>
+    <button id="logoutButton" class="hidden">Çıkış Yap</button>
+  </header>
+
+  <!-- Giriş / Kayıt Bölümü -->
+  <div id="auth-section" class="form-container">
+    <h2>Hesap Oluştur / Oturum Aç</h2>
+    <div id="registerDiv">
+      <h3>Kayıt Ol</h3>
+      <input type="text" id="regUsername" placeholder="Kullanıcı Adı">
+      <input type="password" id="regPassword" placeholder="Şifre">
+      <button id="registerButton">Kayıt Ol</button>
+    </div>
+    <hr>
+    <div id="loginDiv">
+      <h3>Oturum Aç</h3>
+      <input type="text" id="loginUsername" placeholder="Kullanıcı Adı">
+      <input type="password" id="loginPassword" placeholder="Şifre">
+      <button id="loginButton">Oturum Aç</button>
+    </div>
+    <div class="message" id="authMessage"></div>
   </div>
-  
-  <div class="message" id="messageArea"></div>
-  
+
+  <!-- Simülasyon Bölümü -->
+  <div id="simulation-section" class="form-container hidden">
+    <h2>Merhaba, <span id="currentUserName"></span>!</h2>
+    <p>Bakiye: \$<span id="currentUserBalance"></span></p>
+
+    <h3>Tüm Kullanıcılar</h3>
+    <div id="usersList"></div>
+
+    <h3>Hackle</h3>
+    <p>
+      İşlem ücreti 100 \$'dır. Hack moduna girdikten sonra doğru hack şifresini seçerseniz hedef hesaptan 100 \$ çalınır, yanlış seçerseniz 100 \$ ceza uygulanır.
+    </p>
+    <div id="hackTargetArea"></div>
+    <div class="message" id="simMessage"></div>
+  </div>
+
+  <!-- Hack Modal (Özel Hack Ekranı) -->
+  <div id="hackModal">
+    <div class="modal-content">
+      <h3>Hack Modu</h3>
+      <p>Lütfen aşağıdaki seçeneklerden doğru hack şifresini seçiniz:</p>
+      <div id="hackOptions"></div>
+      <button onclick="cancelHack()">İptal</button>
+    </div>
+  </div>
+
   <script>
-    // Hesaplarımızı oluşturuyoruz.
-    const accounts = [
-      { id: 1, name: "Kullanıcı1", balance: 1000 },
-      { id: 2, name: "Kullanıcı2", balance: 1000 },
-      { id: 3, name: "Kullanıcı3", balance: 1000 },
-      { id: 4, name: "Kullanıcı4", balance: 1000 }
-    ];
+    /***** Firebase Başlatma *****/
+    // Aşağıdaki yapılandırma bilgilerini kendi Firebase projenizden alıp ekleyin.
+    const firebaseConfig = {
+      apiKey: "AIzaSyD1gL06NnTrToBUyyqWC8bnjfXlohLQzYM",
+      authDomain: "hackstersw.firebaseapp.com",
+      projectId: "hackstersw",
+      // diğer bilgileri ekleyin...
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-    const accountsDiv = document.getElementById("accounts");
-    const sourceSelect = document.getElementById("source");
-    const targetSelect = document.getElementById("target");
-    const messageArea = document.getElementById("messageArea");
+    /***** DOM Elemanları *****/
+    const authSection = document.getElementById("auth-section");
+    const simulationSection = document.getElementById("simulation-section");
+    const authMessage = document.getElementById("authMessage");
+    const simMessage = document.getElementById("simMessage");
+    const currentUserNameSpan = document.getElementById("currentUserName");
+    const currentUserBalanceSpan = document.getElementById("currentUserBalance");
+    const usersListDiv = document.getElementById("usersList");
+    const hackTargetArea = document.getElementById("hackTargetArea");
+    const logoutButton = document.getElementById("logoutButton");
 
-    // Hesap tablosunu güncelleyen fonksiyon.
-    function updateAccountsTable() {
-      let html = '<table><tr><th>ID</th><th>Hesap Adı</th><th>Bakiye (TL)</th></tr>';
-      accounts.forEach(account => {
-        html += `<tr><td>${account.id}</td><td>${account.name}</td><td>${account.balance}</td></tr>`;
-      });
-      html += '</table>';
-      accountsDiv.innerHTML = html;
-    }
+    let currentUser = null;
+    let currentHackTarget = null;
+    let hackCorrectCode = "";
 
-    // Seçim kutularını dolduruyoruz.
-    function updateSelectBoxes() {
-      sourceSelect.innerHTML = "";
-      targetSelect.innerHTML = "";
-      accounts.forEach(account => {
-        const option1 = document.createElement("option");
-        option1.value = account.id;
-        option1.textContent = account.name;
-        sourceSelect.appendChild(option1);
-
-        const option2 = document.createElement("option");
-        option2.value = account.id;
-        option2.textContent = account.name;
-        targetSelect.appendChild(option2);
-      });
-    }
-
-    // Başlangıçta tablo ve seçim kutularını güncelle.
-    updateAccountsTable();
-    updateSelectBoxes();
-
-    // Hackleme butonuna tıklanma olayı.
-    document.getElementById("hackButton").addEventListener("click", function(){
-      const sourceId = parseInt(sourceSelect.value);
-      const targetId = parseInt(targetSelect.value);
-
-      if(sourceId === targetId) {
-        messageArea.textContent = "Kendi hesabını hacklemeye çalışmak pek akıllıca değil!";
+    /***** Kayıt İşlemleri *****/
+    document.getElementById("registerButton").addEventListener("click", async function() {
+      const username = document.getElementById("regUsername").value.trim();
+      const password = document.getElementById("regPassword").value.trim();
+      if(!username || !password) {
+        authMessage.textContent = "Lütfen tüm alanları doldurun.";
         return;
       }
-      
-      const sourceAcc = accounts.find(acc => acc.id === sourceId);
-      const targetAcc = accounts.find(acc => acc.id === targetId);
-
-      // %50 hackleme başarı şansı.
-      const hackSuccess = Math.random() < 0.5;
-      // %30 yakalanma şansı (hack başarısızsa).
-      const caught = Math.random() < 0.3;
-      
-      if(hackSuccess) {
-        // Hedefin bakiyesinin %10'u kadar para çalınıyor.
-        const stealAmount = Math.floor(targetAcc.balance * 0.1);
-        targetAcc.balance = Math.max(targetAcc.balance - stealAmount, 0);
-        sourceAcc.balance += stealAmount;
-        messageArea.textContent = `${sourceAcc.name}, ${targetAcc.name}'den ${stealAmount} TL başarıyla çaldı!`;
-      } else {
-        if(caught) {
-          // Hacker, kendi bakiyesinin %10'u kadar ceza ödüyor.
-          const penalty = Math.floor(sourceAcc.balance * 0.1);
-          sourceAcc.balance = Math.max(sourceAcc.balance - penalty, 0);
-          messageArea.textContent = `${sourceAcc.name}, hackleme sırasında yakalandı! ${penalty} TL ceza ödedi.`;
-        } else {
-          messageArea.textContent = `${sourceAcc.name}'in hackleme girişimi başarısız oldu, ama yakalanmadı.`;
-        }
+      const userRef = db.collection("users").doc(username);
+      const doc = await userRef.get();
+      if(doc.exists) {
+        authMessage.textContent = "Bu kullanıcı adı zaten alınmış.";
+        return;
       }
-      updateAccountsTable();
+      await userRef.set({ password: password, balance: 1000 });
+      authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
+
+    /***** Oturum Açma İşlemleri *****/
+    document.getElementById("loginButton").addEventListener("click", async function() {
+      const username = document.getElementById("loginUsername").value.trim();
+      const password = document.getElementById("loginPassword").value.trim();
+      const userRef = db.collection("users").doc(username);
+      const doc = await userRef.get();
+      if(doc.exists && doc.data().password === password) {
+        currentUser = { username: username, balance: doc.data().balance };
+        authMessage.textContent = "";
+        switchToSimulation();
+      } else {
+        authMessage.textContent = "Hatalı kullanıcı adı veya şifre.";
+      }
+    });
+
+    /***** Çıkış İşlemi *****/
+    logoutButton.addEventListener("click", function(){
+      currentUser = null;
+      authSection.classList.remove("hidden");
+      simulationSection.classList.add("hidden");
+      logoutButton.classList.add("hidden");
+      authMessage.textContent = "";
+      simMessage.textContent = "";
+    });
+
+    /***** Simülasyon Ekranına Geçiş *****/
+    function switchToSimulation() {
+      authSection.classList.add("hidden");
+      simulationSection.classList.remove("hidden");
+      logoutButton.classList.remove("hidden");
+      currentUserNameSpan.textContent = currentUser.username;
+      updateCurrentUserBalance();
+      subscribeToUsers();
+      updateHackTargetArea();
+    }
+
+    /***** Gerçek Zamanlı Senkronizasyon *****/
+    function subscribeToUsers() {
+      db.collection("users").onSnapshot(snapshot => {
+        let users = [];
+        snapshot.forEach(doc => {
+          users.push({ username: doc.id, ...doc.data() });
+        });
+        renderUsersList(users);
+        updateCurrentUserBalanceFromSnapshot(users);
+        updateHackTargetArea(users);
+      });
+    }
+
+    /***** Kullanıcı Listesi Güncelleme *****/
+    function renderUsersList(users) {
+      let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye (\$)</th><th>İşlem</th></tr>';
+      users.forEach(u => {
+        if(u.username !== currentUser.username) {
+          html += `<tr>
+                     <td>${u.username}</td>
+                     <td>${u.balance}</td>
+                     <td><button onclick="initHack('${u.username}')">Hackle (100\$)</button></td>
+                   </tr>`;
+        }
+      });
+      html += '</table>';
+      usersListDiv.innerHTML = html;
+    }
+
+    /***** Hack Hedefi Seçim Alanı *****/
+    function updateHackTargetArea(users = null) {
+      if(!users) {
+        db.collection("users").get().then(snapshot => {
+          let userArr = [];
+          snapshot.forEach(doc => {
+            userArr.push({ username: doc.id, ...doc.data() });
+          });
+          renderHackTargetArea(userArr);
+        });
+      } else {
+        renderHackTargetArea(users);
+      }
+    }
+    function renderHackTargetArea(users) {
+      let html = '<select id="targetSelect">';
+      users.forEach(u => {
+        if(u.username !== currentUser.username) {
+          html += `<option value="${u.username}">${u.username}</option>`;
+        }
+      });
+      html += '</select> <button onclick="initHack(document.getElementById(\'targetSelect\').value)">Hackle (100\$)</button>';
+      hackTargetArea.innerHTML = html;
+    }
+
+    /***** Bakiye Güncelleme *****/
+    function updateCurrentUserBalanceFromSnapshot(users) {
+      const user = users.find(u => u.username === currentUser.username);
+      if(user) {
+        currentUser.balance = user.balance;
+        currentUserBalanceSpan.textContent = user.balance;
+      }
+    }
+    function updateCurrentUserBalance() {
+      db.collection("users").doc(currentUser.username).get().then(doc => {
+        if(doc.exists) {
+          currentUser.balance = doc.data().balance;
+          currentUserBalanceSpan.textContent = doc.data().balance;
+        }
+      });
+    }
+
+    /***** Hack İşlemleri *****/
+    // Hack girişiminde, işlem ücreti kontrolü yapıldıktan sonra özel hack ekranı (modal) açılır.
+    function initHack(targetUsername) {
+      if(currentUser.balance < 100) {
+        simMessage.textContent = "Hackleme ücreti için yetersiz bakiye!";
+        return;
+      }
+      currentHackTarget = targetUsername;
+      showHackModal();
+    }
+    function showHackModal() {
+      const modal = document.getElementById("hackModal");
+      const hackOptionsDiv = document.getElementById("hackOptions");
+      const codes = ["ALPHA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "FOXTROT"];
+      hackCorrectCode = codes[Math.floor(Math.random() * codes.length)];
+      let wrongOptions = codes.filter(c => c !== hackCorrectCode);
+      wrongOptions = shuffleArray(wrongOptions).slice(0, 3);
+      const options = shuffleArray([hackCorrectCode, ...wrongOptions]);
+      let html = "";
+      options.forEach(option => {
+        html += `<button onclick="processHackAnswer('${option}')">${option}</button>`;
+      });
+      hackOptionsDiv.innerHTML = html;
+      modal.style.display = "flex";
+    }
+    function hideHackModal() {
+      document.getElementById("hackModal").style.display = "none";
+    }
+    function cancelHack() {
+      hideHackModal();
+    }
+    function shuffleArray(array) {
+      let currentIndex = array.length, temporaryValue, randomIndex;
+      while (0 !== currentIndex) {
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex -= 1;
+        temporaryValue = array[currentIndex];
+        array[currentIndex] = array[randomIndex];
+        array[randomIndex] = temporaryValue;
+      }
+      return array;
+    }
+
+    // İşlem sırasında Firestore transaction kullanarak, hacker ve hedef hesapları güncelliyoruz.
+    async function processHackAnswer(selectedCode) {
+      hideHackModal();
+      simMessage.textContent = "İşlem yapılıyor...";
+      const hackerRef = db.collection("users").doc(currentUser.username);
+      const targetRef = db.collection("users").doc(currentHackTarget);
+      try {
+        await db.runTransaction(async (transaction) => {
+          const hackerDoc = await transaction.get(hackerRef);
+          const targetDoc = await transaction.get(targetRef);
+          if(!hackerDoc.exists || !targetDoc.exists) {
+            throw "Kullanıcı bulunamadı!";
+          }
+          let hackerBalance = hackerDoc.data().balance;
+          let targetBalance = targetDoc.data().balance;
+          if(hackerBalance < 100) {
+            throw "Yetersiz bakiye!";
+          }
+          // İşlem ücreti 100$ kesiliyor.
+          hackerBalance -= 100;
+          if(selectedCode === hackCorrectCode) {
+            // Doğru şifre: hedef hesaptan 100$ çalınıyor (yeterli bakiye varsa)
+            const stealAmount = targetBalance >= 100 ? 100 : targetBalance;
+            targetBalance -= stealAmount;
+            hackerBalance += stealAmount;
+            simMessage.textContent = `${currentUser.username}, ${currentHackTarget}'den ${stealAmount} \$ başarıyla çaldı!`;
+          } else {
+            simMessage.textContent = `${currentUser.username}, yanlış hack şifresi seçildi. 100 \$ ceza uygulandı.`;
+          }
+          transaction.update(hackerRef, { balance: hackerBalance });
+          transaction.update(targetRef, { balance: targetBalance });
+        });
+      } catch (error) {
+        simMessage.textContent = "İşlem başarısız: " + error;
+      }
+    }
   </script>
 </body>
 </html>
