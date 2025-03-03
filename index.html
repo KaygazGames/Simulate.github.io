@@ -99,7 +99,7 @@
     <button id="logoutButton" class="hidden">Çıkış Yap</button>
   </header>
   
-  <!-- Sabit Admin Butonu (Admin işlevlerini açmak için şifre gerekecek) -->
+  <!-- Sabit Admin Paneli Butonu (Admin işlemleri için şifre gerekecek) -->
   <button id="adminButton" onclick="openAdminModal()">Admin Panelini Aç</button>
   
   <!-- Giriş / Kayıt Bölümü -->
@@ -126,7 +126,7 @@
     <h2>Merhaba, <span id="currentUserName"></span>!</h2>
     <p>Bakiye: $<span id="currentUserBalance"></span></p>
     
-    <!-- Hack Bölümü (Normal Kullanıcı) -->
+    <!-- Hack Bölümü -->
     <div id="hackSection">
       <h3>Hackle</h3>
       <p>
@@ -189,7 +189,7 @@
     let currentUser = null;
     let currentHackTarget = null;
     let hackCorrectCode = "";
-    let adminVerified = false;  // Admin işlevleri görünmesi için doğrulama
+    let adminVerified = false;  // Admin işlevlerinin görünmesi için doğrulama
     
     // Kayıt İşlemi
     document.getElementById("registerButton").addEventListener("click", async function() {
@@ -209,7 +209,7 @@
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
     
-    // Oturum Açma İşlemi
+    // Oturum Açma
     document.getElementById("loginButton").addEventListener("click", async function() {
       const username = document.getElementById("loginUsername").value.trim();
       const password = document.getElementById("loginPassword").value.trim();
@@ -259,7 +259,17 @@
       db.collection("users").onSnapshot(snapshot => {
         let users = [];
         snapshot.forEach(doc => {
-          users.push({ username: doc.id, ...doc.data() });
+          let u = { username: doc.id, ...doc.data() };
+          // Eğer ban süresi varsa ve süresi dolmuşsa otomatik unban işlemi tetiklensin
+          if (u.banned && u.banUntil) {
+            let banTime = new Date(u.banUntil).getTime();
+            if (Date.now() > banTime) {
+              unbanUser(u.username);
+              u.banned = false;
+              u.banUntil = null;
+            }
+          }
+          users.push(u);
         });
         updateScoreboard(users);
         updateCurrentUserBalanceFromSnapshot(users);
@@ -267,7 +277,7 @@
       });
     }
     
-    // Scoreboard – Eğer adminVerified true ise ekstra sütunlar (Ceza, Banla, Banı Aç, Hack Mute, Hesap Sil) eklenir.
+    // Scoreboard – Admin şifresi doğrulanmışsa ek sütunlar eklenir.
     function updateScoreboard(users) {
       let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye ($)</th><th>Durum</th>';
       if (adminVerified) {
@@ -285,24 +295,18 @@
           html += `<td>Aktif</td>`;
         }
         if (adminVerified) {
-          // Ceza Ver butonu
-          html += `<td><button onclick="givePenalty('${u.username}')">Ceza (100$)</button></td>`;
-          // Banla butonu (eğer banlı değilse)
-          if (!u.banned) {
-            html += `<td><button onclick="banUser('${u.username}')">Banla</button></td>`;
+          if (u.username !== currentUser.username) {
+            html += `<td><button onclick="givePenalty('${u.username}')">Ceza (100$)</button></td>`;
+            if (!u.banned) {
+              html += `<td><button onclick="banUser('${u.username}')">Banla</button></td>`;
+            } else {
+              html += `<td><button onclick="unbanUser('${u.username}')">Banı Aç</button></td>`;
+            }
+            html += `<td><button onclick="muteUser('${u.username}')">Hack Mute</button></td>`;
+            html += `<td><button onclick="deleteUser('${u.username}')">Hesap Sil</button></td>`;
           } else {
-            html += `<td></td>`;
+            html += `<td></td><td></td><td></td><td></td><td></td>`;
           }
-          // Banı Aç butonu (eğer banlıysa)
-          if (u.banned) {
-            html += `<td><button onclick="unbanUser('${u.username}')">Banı Aç</button></td>`;
-          } else {
-            html += `<td></td>`;
-          }
-          // Hack Mute butonu
-          html += `<td><button onclick="muteUser('${u.username}')">Hack Mute</button></td>`;
-          // Hesap Sil butonu
-          html += `<td><button onclick="deleteUser('${u.username}')">Hesap Sil</button></td>`;
         }
         html += '</tr>';
       });
@@ -363,8 +367,8 @@
       }
       // Hack mute kontrolü
       if (currentUser.muteUntil) {
-        let muteUntilTime = new Date(currentUser.muteUntil).getTime();
-        if (Date.now() < muteUntilTime) {
+        let muteTime = new Date(currentUser.muteUntil).getTime();
+        if (Date.now() < muteTime) {
           simMessage.textContent = "Hack mute aktif. Lütfen daha sonra tekrar deneyiniz.";
           return;
         }
@@ -445,7 +449,7 @@
       }
     }
     
-    // Admin İşlevleri – Scoreboard’da ek sütunlar admin şifresi doğrulandığında görünür
+    // Admin Paneli İşlemleri – Admin işlevlerinin görünmesi için admin şifresi doğrulanmalı.
     function openAdminModal() {
       document.getElementById("adminModal").style.display = "flex";
     }
@@ -484,7 +488,7 @@
     }
     
     function banUser(username) {
-      let duration = prompt("Ban süresi dakikası giriniz (örneğin: 1, 10, 120):");
+      let duration = prompt("Ban süresini dakika olarak giriniz (örn: 1, 10, 120):");
       if (duration != null) {
         let minutes = parseInt(duration);
         if (isNaN(minutes) || minutes <= 0) {
@@ -507,7 +511,7 @@
     }
     
     function muteUser(username) {
-      let duration = prompt("Hack mute süresi dakikası giriniz (örneğin: 1, 10, 120):");
+      let duration = prompt("Hack mute süresini dakika olarak giriniz (örn: 1, 10, 120):");
       if (duration != null) {
         let minutes = parseInt(duration);
         if (isNaN(minutes) || minutes <= 0) {
@@ -516,6 +520,12 @@
         }
         let muteUntil = new Date(Date.now() + minutes * 60000);
         db.collection("users").doc(username).update({ muteUntil: muteUntil });
+      }
+    }
+    
+    function deleteUserAccount(username) {
+      if (confirm("Bu kullanıcıyı tamamen silmek istediğinize emin misiniz?")) {
+        db.collection("users").doc(username).delete();
       }
     }
   </script>
