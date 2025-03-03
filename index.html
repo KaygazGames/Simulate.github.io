@@ -59,7 +59,7 @@
     <h2>Merhaba, <span id="currentUserName"></span>!</h2>
     <p>Bakiye: \$<span id="currentUserBalance"></span></p>
 
-    <!-- Normal Kullanıcılar için Hack Bölümü -->
+    <!-- Normal Kullanıcı Hack Bölümü -->
     <div id="hackSection">
       <h3>Hackle</h3>
       <p>
@@ -72,9 +72,9 @@
     <!-- Herkese Açık Admin Paneli -->
     <div id="adminPanel" class="form-container">
       <h3>Admin Paneli</h3>
-      <p>Admin paneline erişmek için aşağıdaki "Admin Panelini Aç" butonuna tıklayıp admin şifresini giriniz.</p>
+      <p>Admin panelini açmak için aşağıdaki butona tıklayınız. Admin şifresi girildiğinde, kullanıcıların scoreboard'ı görüntülenecektir.</p>
       <button onclick="openAdminModal()">Admin Panelini Aç</button>
-      <!-- Admin paneli açıldığında scoreboard burada görünecek -->
+      <!-- Scoreboard alanı; başlangıçta gizli -->
       <div id="adminScoreboard" class="hidden"></div>
       <div class="message" id="adminMessage"></div>
     </div>
@@ -92,7 +92,7 @@
   <!-- Admin Şifre Modalı -->
   <div id="adminModal">
     <div class="modal-content">
-      <h3>Admin Paneli Açma</h3>
+      <h3>Admin Panelini Açma</h3>
       <p>Lütfen admin şifresini giriniz:</p>
       <input type="password" id="adminPasswordInput" placeholder="Admin Şifresi">
       <button onclick="verifyAdminPassword()">Onayla</button>
@@ -130,7 +130,7 @@
     let currentUser = null;
     let currentHackTarget = null;
     let hackCorrectCode = "";
-    let adminPanelOpen = false;  // Admin panelin açık olup olmadığını tutar
+    let adminPanelOpen = false; // Admin panel scoreboard'ın görünür olup olmadığını takip eder
 
     /***** Kayıt İşlemleri *****/
     document.getElementById("registerButton").addEventListener("click", async function() {
@@ -146,7 +146,7 @@
         authMessage.textContent = "Bu kullanıcı adı zaten alınmış.";
         return;
       }
-      // Herhangi bir kullanıcı kayıt olur, admin yetkisi burada tanımlanmıyor.
+      // Kayıt sırasında admin yetkisi tanımlanmıyor; herkes aynı
       await userRef.set({ password: password, balance: 1000, banned: false });
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
@@ -164,7 +164,7 @@
         }
         currentUser = { 
           username: username, 
-          balance: doc.data().balance
+          balance: doc.data().balance 
         };
         authMessage.textContent = "";
         switchToSimulation();
@@ -181,7 +181,6 @@
       logoutButton.classList.add("hidden");
       authMessage.textContent = "";
       simMessage.textContent = "";
-      // Admin paneli kapalı olsun.
       adminPanelOpen = false;
       adminScoreboard.classList.add("hidden");
       adminMessage.textContent = "";
@@ -195,7 +194,7 @@
       currentUserNameSpan.textContent = currentUser.username;
       updateCurrentUserBalance();
       subscribeToUsers();
-      // Hem hack bölümü hem de admin paneli herkese açık; admin paneli için ayrı şifre girilecek.
+      // Hack bölümü her kullanıcı için görünür; admin paneli için ayrı modal açılıyor.
       hackSection.classList.remove("hidden");
     }
 
@@ -209,7 +208,6 @@
         renderUsersList(users);
         updateCurrentUserBalanceFromSnapshot(users);
         updateHackTargetArea(users);
-        // Eğer admin paneli açılmışsa, scoreboard'ı güncelle.
         if(adminPanelOpen) {
           renderAdminScoreboard(users);
         }
@@ -342,7 +340,7 @@
       return array;
     }
 
-    // Firestore transaction ile normal kullanıcı için hack işlemleri gerçekleştiriliyor.
+    // Firestore transaction ile hack işlemi gerçekleştiriliyor.
     async function processHackAnswer(selectedCode) {
       hideHackModal();
       simMessage.textContent = "İşlem yapılıyor...";
@@ -379,7 +377,7 @@
     }
 
     /***** Admin Paneli İşlemleri *****/
-    // Admin paneline erişmek için "Admin Panelini Aç" butonuna tıklandığında admin şifre modalı açılır.
+    // Herkese açık admin panelinde "Admin Panelini Aç" butonuna tıklanınca admin şifre modalı açılır.
     function openAdminModal() {
       document.getElementById("adminModal").style.display = "flex";
     }
