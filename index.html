@@ -63,7 +63,7 @@
 
     <h3>Hackle</h3>
     <p>
-      İşlem ücreti 100 \$'dır. Hack moduna girdikten sonra doğru hack şifresini seçerseniz hedef hesaptan 100 \$ çalınır, yanlış seçerseniz 100 \$ ceza uygulanır.
+      İşlem ücreti 100 \$'dır. Hack moduna girdikten sonra, geri dönüşüm hakkında sorulan soruya doğru cevabı verirseniz hedef hesaptan 100 \$ çalınır, yanlış cevaba basılırsa 100 \$ ceza uygulanır.
     </p>
     <div id="hackTargetArea"></div>
     <div class="message" id="simMessage"></div>
@@ -73,7 +73,6 @@
   <div id="hackModal">
     <div class="modal-content">
       <h3>Hack Modu</h3>
-      <p>Lütfen aşağıdaki seçeneklerden doğru hack şifresini seçiniz:</p>
       <div id="hackOptions"></div>
       <button onclick="cancelHack()">İptal</button>
     </div>
@@ -241,15 +240,26 @@
       currentHackTarget = targetUsername;
       showHackModal();
     }
+    // Hack modalunda artık geri dönüşümle ilgili soru soruluyor.
     function showHackModal() {
       const modal = document.getElementById("hackModal");
       const hackOptionsDiv = document.getElementById("hackOptions");
-      const codes = ["ALPHA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "FOXTROT"];
-      hackCorrectCode = codes[Math.floor(Math.random() * codes.length)];
-      let wrongOptions = codes.filter(c => c !== hackCorrectCode);
-      wrongOptions = shuffleArray(wrongOptions).slice(0, 3);
-      const options = shuffleArray([hackCorrectCode, ...wrongOptions]);
-      let html = "";
+      // Geri dönüşüm sorusu tanımı
+      const recyclingQuestion = {
+        question: "Geri dönüşümün temel faydası nedir?",
+        options: [
+          "Kaynak tasarrufu sağlar",
+          "Enerji israfı yapar",
+          "Atıkları artırır",
+          "Hava kirliliğini artırır"
+        ],
+        correct: "Kaynak tasarrufu sağlar"
+      };
+      // Doğru cevabı global değişkene ata
+      hackCorrectCode = recyclingQuestion.correct;
+      // Seçenekleri karıştır
+      const options = shuffleArray(recyclingQuestion.options.slice());
+      let html = `<p>${recyclingQuestion.question}</p>`;
       options.forEach(option => {
         html += `<button onclick="processHackAnswer('${option}')">${option}</button>`;
       });
@@ -295,13 +305,13 @@
           // İşlem ücreti 100$ kesiliyor.
           hackerBalance -= 100;
           if(selectedCode === hackCorrectCode) {
-            // Doğru şifre: hedef hesaptan 100$ çalınıyor (yeterli bakiye varsa)
+            // Doğru cevap: hedef hesaptan 100$ çalınıyor (yeterli bakiye varsa)
             const stealAmount = targetBalance >= 100 ? 100 : targetBalance;
             targetBalance -= stealAmount;
             hackerBalance += stealAmount;
             simMessage.textContent = `${currentUser.username}, ${currentHackTarget}'den ${stealAmount} \$ başarıyla çaldı!`;
           } else {
-            simMessage.textContent = `${currentUser.username}, yanlış hack şifresi seçildi. 100 \$ ceza uygulandı.`;
+            simMessage.textContent = `${currentUser.username}, yanlış cevap. 100 \$ ceza uygulandı.`;
           }
           transaction.update(hackerRef, { balance: hackerBalance });
           transaction.update(targetRef, { balance: targetBalance });
