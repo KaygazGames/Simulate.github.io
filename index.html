@@ -19,31 +19,10 @@
       margin-bottom: 20px; 
     }
     header { 
-      display: flex; 
-      align-items: center; 
       margin-bottom: 20px; 
-    }
-    /* Logout butonu */
-    #logoutButton {
-      padding: 10px 15px;
-      background-color: #c00;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    /* Sabit admin butonu: sağ üst köşe */
-    #adminButton {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      padding: 10px 15px;
-      background-color: #333;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      z-index: 1100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     table { 
       width: 100%; 
@@ -55,7 +34,10 @@
       padding: 10px; 
       text-align: center; 
     }
-    th { background-color: #333; color: #fff; }
+    th { 
+      background-color: #333; 
+      color: #fff; 
+    }
     .message { 
       padding: 10px; 
       background: #e7e7e7; 
@@ -65,15 +47,13 @@
     /* Modal Stilleri */
     #hackModal, #adminModal {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       background: rgba(0,0,0,0.5);
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 1500;
+      z-index: 1000;
     }
     .modal-content {
       background: #fff;
@@ -85,8 +65,31 @@
     .modal-content button {
       margin: 10px;
     }
+    /* Sağ üst köşede sabit admin paneli butonu */
+    #adminButton {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 10px 15px;
+      background-color: #333;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      z-index: 1100;
+    }
+    /* Çıkış butonu */
+    #logoutButton {
+      padding: 10px 15px;
+      background-color: #c00;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
   </style>
-  <!-- Firebase SDK -->
+  <!-- Firebase SDK (compat sürümleri) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
@@ -95,8 +98,9 @@
     <h1>Senkranize Banka & Hacker Simülatörü</h1>
     <button id="logoutButton" class="hidden">Çıkış Yap</button>
   </header>
-  <!-- Sabit Admin Butonu -->
-  <button id="adminButton" onclick="openAdminModal()">Admin Paneline Geç</button>
+  
+  <!-- Sabit Admin Paneli Butonu (Admin işlemleri için şifre gerekecek) -->
+  <button id="adminButton" onclick="openAdminModal()">Admin Panelini Aç</button>
   
   <!-- Giriş / Kayıt Bölümü -->
   <div id="auth-section" class="form-container">
@@ -122,7 +126,7 @@
     <h2>Merhaba, <span id="currentUserName"></span>!</h2>
     <p>Bakiye: $<span id="currentUserBalance"></span></p>
     
-    <!-- Hack Bölümü (Normal Kullanıcı) -->
+    <!-- Hack Bölümü -->
     <div id="hackSection">
       <h3>Hackle</h3>
       <p>
@@ -132,10 +136,10 @@
       <div class="message" id="simMessage"></div>
     </div>
     
-    <!-- Admin Paneli (Başlangıçta gizli) -->
-    <div id="adminPanel" class="form-container hidden">
-      <h3>Admin Paneli</h3>
-      <div id="adminScoreboard"></div>
+    <!-- Scoreboard (Herkese Açık) -->
+    <div id="scoreboardSection" class="form-container">
+      <h3>Scoreboard</h3>
+      <div id="scoreboard"></div>
       <div class="message" id="adminMessage"></div>
     </div>
   </div>
@@ -149,7 +153,7 @@
     </div>
   </div>
   
-  <!-- Admin Şifre Modalı -->
+  <!-- Admin Şifre Modalı (Admin paneli için şifre gerekecek) -->
   <div id="adminModal">
     <div class="modal-content">
       <h3>Admin Panelini Aç</h3>
@@ -161,7 +165,7 @@
   </div>
   
   <script>
-    // Firebase yapılandırması (kendi bilgilerinizi ekleyin)
+    // Firebase yapılandırması – kendi bilgilerinizi buraya ekleyin
     const firebaseConfig = {
       apiKey: "AIzaSyD1gL06NnTrToBUyyqWC8bnjfXlohLQzYM",
       authDomain: "hackstersw.firebaseapp.com",
@@ -178,18 +182,14 @@
     const simMessage = document.getElementById("simMessage");
     const currentUserNameSpan = document.getElementById("currentUserName");
     const currentUserBalanceSpan = document.getElementById("currentUserBalance");
-    const usersListDiv = document.getElementById("usersList");
     const hackTargetArea = document.getElementById("hackTargetArea");
+    const scoreboardDiv = document.getElementById("scoreboard");
     const logoutButton = document.getElementById("logoutButton");
-    const hackSection = document.getElementById("hackSection");
-    const adminPanel = document.getElementById("adminPanel");
-    const adminMessage = document.getElementById("adminMessage");
-    const adminScoreboard = document.getElementById("adminScoreboard");
     
     let currentUser = null;
     let currentHackTarget = null;
     let hackCorrectCode = "";
-    let adminPanelOpen = false;
+    let adminVerified = false;  // Admin işlevlerini açmak için doğrulama
     
     // Kayıt İşlemi
     document.getElementById("registerButton").addEventListener("click", async function() {
@@ -209,7 +209,7 @@
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
     
-    // Oturum Açma İşlemi
+    // Oturum Açma
     document.getElementById("loginButton").addEventListener("click", async function() {
       const username = document.getElementById("loginUsername").value.trim();
       const password = document.getElementById("loginPassword").value.trim();
@@ -236,9 +236,8 @@
       logoutButton.classList.add("hidden");
       authMessage.textContent = "";
       simMessage.textContent = "";
-      adminPanelOpen = false;
-      adminScoreboard.classList.add("hidden");
-      adminMessage.textContent = "";
+      adminVerified = false;
+      updateScoreboard([]); // Scoreboard güncellensin
     });
     
     function switchToSimulation() {
@@ -248,7 +247,6 @@
       currentUserNameSpan.textContent = currentUser.username;
       updateCurrentUserBalance();
       subscribeToUsers();
-      hackSection.classList.remove("hidden");
     }
     
     // Gerçek Zamanlı Senkronizasyon
@@ -258,47 +256,36 @@
         snapshot.forEach(doc => {
           users.push({ username: doc.id, ...doc.data() });
         });
-        renderUsersList(users);
+        updateScoreboard(users);
         updateCurrentUserBalanceFromSnapshot(users);
         updateHackTargetArea(users);
-        if (adminPanelOpen) {
-          renderAdminScoreboard(users);
-        }
       });
     }
     
-    // Kullanıcı Listesi (Normal)
-    function renderUsersList(users) {
-      let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye ($)</th><th>İşlem</th></tr>';
+    // Scoreboard: Herkes için görünen tablo; admin işlevleri adminVerified true ise eklenir.
+    function updateScoreboard(users) {
+      let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye ($)</th><th>Durum</th>';
+      if (adminVerified) {
+        html += '<th>Ceza Ver</th><th>Banla</th>';
+      }
+      html += '</tr>';
       users.forEach(u => {
-        if (u.username !== currentUser.username) {
-          html += `<tr>
-                     <td>${u.username}</td>
-                     <td>${u.balance}${u.banned ? " (BAN)" : ""}</td>
-                     <td><button onclick="initHack('${u.username}')">Hackle (100$)</button></td>
-                   </tr>`;
+        html += `<tr>
+                   <td>${u.username}</td>
+                   <td>${u.balance}${u.banned ? " (BAN)" : ""}</td>
+                   <td>${u.banned ? "Banlı" : "Aktif"}</td>`;
+        if (adminVerified) {
+          if(u.username !== currentUser.username) {
+            html += `<td><button onclick="givePenalty('${u.username}')">Ceza (100$)</button></td>
+                     <td>${u.banned ? "Zaten Banlı" : `<button onclick="banUser('${u.username}')">Banla</button>`}</td>`;
+          } else {
+            html += `<td></td><td></td>`;
+          }
         }
+        html += '</tr>';
       });
       html += '</table>';
-      usersListDiv.innerHTML = html;
-    }
-    
-    // Admin Scoreboard ve İşlemleri
-    function renderAdminScoreboard(users) {
-      let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye ($)</th><th>Durum</th><th>Ceza Ver</th><th>Banla</th></tr>';
-      users.forEach(u => {
-        if (u.username !== currentUser.username) {
-          html += `<tr>
-                     <td>${u.username}</td>
-                     <td>${u.balance}</td>
-                     <td>${u.banned ? "Banlandı" : "Aktif"}</td>
-                     <td><button onclick="givePenalty('${u.username}')">Ceza (100$)</button></td>
-                     <td>${u.banned ? "Zaten Banlı" : `<button onclick="banUser('${u.username}')">Banla</button>`}</td>
-                   </tr>`;
-        }
-      });
-      html += '</table>';
-      adminScoreboard.innerHTML = html;
+      scoreboardDiv.innerHTML = html;
     }
     
     // Hack Hedefi Seçim Alanı
@@ -326,7 +313,6 @@
       hackTargetArea.innerHTML = html;
     }
     
-    // Bakiye Güncelleme
     function updateCurrentUserBalanceFromSnapshot(users) {
       const user = users.find(u => u.username === currentUser.username);
       if (user) {
@@ -343,7 +329,7 @@
       });
     }
     
-    // Hack İşlemleri (Normal Kullanıcı)
+    // Hack İşlemleri
     function initHack(targetUsername) {
       if (currentUser.balance < 100) {
         simMessage.textContent = "Hackleme ücreti için yetersiz bakiye!";
@@ -382,7 +368,7 @@
     }
     function shuffleArray(array) {
       let currentIndex = array.length, temporaryValue, randomIndex;
-      while (0 !== currentIndex) {
+      while (currentIndex !== 0) {
         randomIndex = Math.floor(Math.random() * currentIndex);
         currentIndex -= 1;
         temporaryValue = array[currentIndex];
@@ -408,7 +394,6 @@
           if (hackerBalance < 100) {
             throw "Yetersiz bakiye!";
           }
-          // İşlem ücreti 100$ kesiliyor.
           hackerBalance -= 100;
           if (selectedCode === hackCorrectCode) {
             const stealAmount = targetBalance >= 100 ? 100 : targetBalance;
@@ -426,7 +411,8 @@
       }
     }
     
-    // Admin Paneli İşlemleri
+    // Admin Paneli – Admin işlemleri yalnızca adminVerified true olduğunda görünür.
+    // Admin panelinin şifreli kısmı için "Admin Panelini Aç" butonuna tıklandığında açılan modalı kullanıyoruz.
     function openAdminModal() {
       document.getElementById("adminModal").style.display = "flex";
     }
@@ -435,19 +421,19 @@
     }
     function verifyAdminPassword() {
       const input = document.getElementById("adminPasswordInput").value;
-      // Admin şifresi "Bilmem"
+      // Admin şifresi "Bilmem" olsun.
       if (input === "Bilmem") {
         document.getElementById("adminModal").style.display = "none";
-        adminMessage.textContent = "Admin paneli açıldı.";
-        adminScoreboard.classList.remove("hidden");
-        adminPanel.classList.remove("hidden");
-        adminPanelOpen = true;
+        adminMessage.textContent = "Admin işlevleri aktif.";
+        adminVerified = true;
+        subscribeToUsers();  // Scoreboard güncellensin, admin işlevleri eklensin.
       } else {
         adminMessage.textContent = "Yanlış admin şifresi!";
-        adminScoreboard.classList.add("hidden");
-        adminPanelOpen = false;
+        adminVerified = false;
+        subscribeToUsers();
       }
     }
+    
     async function givePenalty(username) {
       try {
         const userRef = db.collection("users").doc(username);
@@ -463,6 +449,7 @@
         adminMessage.textContent = "Ceza uygulanamadı: " + error;
       }
     }
+    
     async function banUser(username) {
       try {
         const userRef = db.collection("users").doc(username);
@@ -473,5 +460,16 @@
       }
     }
   </script>
+  
+  <!-- Admin Şifre Modalı -->
+  <div id="adminModal">
+    <div class="modal-content">
+      <h3>Admin Panelini Aç</h3>
+      <p>Lütfen admin şifresini giriniz:</p>
+      <input type="password" id="adminPasswordInput" placeholder="Admin Şifresi">
+      <button onclick="verifyAdminPassword()">Onayla</button>
+      <button onclick="cancelAdmin()">İptal</button>
+    </div>
+  </div>
 </body>
 </html>
