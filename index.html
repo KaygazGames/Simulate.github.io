@@ -24,6 +24,17 @@
       background: #fff; padding: 20px; border-radius: 4px; width: 300px; text-align: center;
     }
     #hackModal button, #adminModal button { margin: 10px; }
+    /* Admin Panel Butonu */
+    #goToAdminBtn {
+      padding: 12px 20px;
+      background-color: #333;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+    }
   </style>
   <!-- Firebase SDK (compat sürümleri) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -69,13 +80,13 @@
       <div class="message" id="simMessage"></div>
     </div>
 
-    <!-- Herkese Açık Admin Paneli -->
-    <div id="adminPanel" class="form-container">
+    <!-- Herkese Açık Admin Paneli Butonu -->
+    <button id="goToAdminBtn" onclick="openAdminModal()">Admin Paneline Geç</button>
+
+    <!-- Admin Paneli: Scoreboard ve Yönetim İşlemleri -->
+    <div id="adminPanel" class="form-container hidden">
       <h3>Admin Paneli</h3>
-      <p>Admin panelini açmak için aşağıdaki butona tıklayınız. Admin şifresi girildiğinde, kullanıcıların scoreboard'ı görüntülenecektir.</p>
-      <button onclick="openAdminModal()">Admin Panelini Aç</button>
-      <!-- Scoreboard alanı; başlangıçta gizli -->
-      <div id="adminScoreboard" class="hidden"></div>
+      <div id="adminScoreboard"></div>
       <div class="message" id="adminMessage"></div>
     </div>
   </div>
@@ -126,6 +137,7 @@
     const adminPanel = document.getElementById("adminPanel");
     const adminMessage = document.getElementById("adminMessage");
     const adminScoreboard = document.getElementById("adminScoreboard");
+    const goToAdminBtn = document.getElementById("goToAdminBtn");
 
     let currentUser = null;
     let currentHackTarget = null;
@@ -146,7 +158,7 @@
         authMessage.textContent = "Bu kullanıcı adı zaten alınmış.";
         return;
       }
-      // Kayıt sırasında admin yetkisi tanımlanmıyor; herkes aynı
+      // Kayıt sırasında admin yetkisi tanımlanmıyor; herkes aynı.
       await userRef.set({ password: password, balance: 1000, banned: false });
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
@@ -194,7 +206,7 @@
       currentUserNameSpan.textContent = currentUser.username;
       updateCurrentUserBalance();
       subscribeToUsers();
-      // Hack bölümü her kullanıcı için görünür; admin paneli için ayrı modal açılıyor.
+      // Hack bölümü her kullanıcı için görünür.
       hackSection.classList.remove("hidden");
     }
 
@@ -358,7 +370,7 @@
           if(hackerBalance < 100) {
             throw "Yetersiz bakiye!";
           }
-          // İşlem ücreti 100$ kesiliyor.
+          // İşlem ücreti 100\$ kesiliyor.
           hackerBalance -= 100;
           if(selectedCode === hackCorrectCode) {
             const stealAmount = targetBalance >= 100 ? 100 : targetBalance;
@@ -377,7 +389,7 @@
     }
 
     /***** Admin Paneli İşlemleri *****/
-    // Herkese açık admin panelinde "Admin Panelini Aç" butonuna tıklanınca admin şifre modalı açılır.
+    // "Admin Paneline Geç" butonuna tıklanınca admin şifre modalı açılır.
     function openAdminModal() {
       document.getElementById("adminModal").style.display = "flex";
     }
