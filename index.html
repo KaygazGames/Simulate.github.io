@@ -33,6 +33,7 @@
       border: 1px solid #ccc; 
       padding: 10px; 
       text-align: center; 
+      vertical-align: middle;
     }
     th { 
       background-color: #333; 
@@ -65,7 +66,7 @@
     .modal-content button {
       margin: 10px;
     }
-    /* Sağ üst köşede sabit admin butonu */
+    /* Sabit admin butonu (sağ üst köşe) */
     #adminButton {
       position: fixed;
       top: 10px;
@@ -99,7 +100,7 @@
     <button id="logoutButton" class="hidden">Çıkış Yap</button>
   </header>
   
-  <!-- Sabit Admin Paneli Butonu (Admin işlemleri için şifre gerekecek) -->
+  <!-- Sabit Admin Butonu -->
   <button id="adminButton" onclick="openAdminModal()">Admin Panelini Aç</button>
   
   <!-- Giriş / Kayıt Bölümü -->
@@ -136,7 +137,7 @@
       <div class="message" id="simMessage"></div>
     </div>
     
-    <!-- Scoreboard / Admin Paneli (Herkese Açık) -->
+    <!-- Scoreboard / Admin Paneli (herkese açık) -->
     <div id="scoreboardSection" class="form-container">
       <h3>Scoreboard</h3>
       <div id="scoreboard"></div>
@@ -153,7 +154,7 @@
     </div>
   </div>
   
-  <!-- Admin Şifre Modalı (Admin işlemleri için) -->
+  <!-- Admin Şifre Modalı -->
   <div id="adminModal">
     <div class="modal-content">
       <h3>Admin Panelini Aç</h3>
@@ -165,7 +166,7 @@
   </div>
   
   <script>
-    // Firebase yapılandırması – kendi bilgilerinizi ekleyin
+    // Firebase yapılandırması – kendi bilgilerinizi buraya ekleyin
     const firebaseConfig = {
       apiKey: "AIzaSyD1gL06NnTrToBUyyqWC8bnjfXlohLQzYM",
       authDomain: "hackstersw.firebaseapp.com",
@@ -209,7 +210,7 @@
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
     
-    // Oturum Açma
+    // Oturum Açma İşlemi
     document.getElementById("loginButton").addEventListener("click", async function() {
       const username = document.getElementById("loginUsername").value.trim();
       const password = document.getElementById("loginPassword").value.trim();
@@ -254,13 +255,13 @@
       subscribeToUsers();
     }
     
-    // Gerçek Zamanlı Senkronizasyon
+    // Gerçek Zamanlı Senkronizasyon – Aynı zamanda ban süresi kontrolü yapar
     function subscribeToUsers() {
       db.collection("users").onSnapshot(snapshot => {
         let users = [];
         snapshot.forEach(doc => {
           let u = { username: doc.id, ...doc.data() };
-          // Eğer ban süresi varsa ve süresi dolmuşsa otomatik unban işlemi tetiklensin
+          // Ban süresi dolmuşsa otomatik unban
           if (u.banned && u.banUntil) {
             let banTime = new Date(u.banUntil).getTime();
             if (Date.now() > banTime) {
@@ -277,7 +278,7 @@
       });
     }
     
-    // Scoreboard – Admin şifresi doğrulanmışsa ek sütunlar eklenir.
+    // Scoreboard – Herkese açık; adminVerified true ise ekstra sütunlar eklenir.
     function updateScoreboard(users) {
       let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye ($)</th><th>Durum</th>';
       if (adminVerified) {
@@ -303,7 +304,7 @@
               html += `<td><button onclick="unbanUser('${u.username}')">Banı Aç</button></td>`;
             }
             html += `<td><button onclick="muteUser('${u.username}')">Hack Mute</button></td>`;
-            html += `<td><button onclick="deleteUser('${u.username}')">Hesap Sil</button></td>`;
+            html += `<td><button onclick="deleteUserAccount('${u.username}')">Hesap Sil</button></td>`;
           } else {
             html += `<td></td><td></td><td></td><td></td><td></td>`;
           }
@@ -449,7 +450,7 @@
       }
     }
     
-    // Admin Paneli İşlemleri – Admin işlevlerinin görünmesi için admin şifresi doğrulanmalı.
+    // Admin İşlevleri – Admin şifresi doğrulanınca adminVerified true olur.
     function openAdminModal() {
       document.getElementById("adminModal").style.display = "flex";
     }
@@ -458,7 +459,7 @@
     }
     function verifyAdminPassword() {
       const input = document.getElementById("adminPasswordInput").value;
-      // Admin şifresi: "Bilmem"
+      // Admin şifresi "Bilmem" olsun.
       if (input === "Bilmem") {
         document.getElementById("adminModal").style.display = "none";
         adminMessage.textContent = "Admin işlevleri aktif.";
@@ -504,8 +505,8 @@
       db.collection("users").doc(username).update({ banned: false, banUntil: null });
     }
     
-    function deleteUser(username) {
-      if (confirm("Bu kullanıcıyı silmek istediğinize emin misiniz?")) {
+    function deleteUserAccount(username) {
+      if (confirm("Bu kullanıcıyı tamamen silmek istediğinize emin misiniz?")) {
         db.collection("users").doc(username).delete();
       }
     }
@@ -523,8 +524,8 @@
       }
     }
     
-    function deleteUserAccount(username) {
-      if (confirm("Bu kullanıcıyı tamamen silmek istediğinize emin misiniz?")) {
+    function deleteUser(username) {
+      if (confirm("Bu kullanıcıyı silmek istediğinize emin misiniz?")) {
         db.collection("users").doc(username).delete();
       }
     }
