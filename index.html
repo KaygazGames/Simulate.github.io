@@ -14,15 +14,16 @@
     header { display: flex; justify-content: space-between; align-items: center; }
     .message { padding: 10px; background: #e7e7e7; border-left: 5px solid #333; margin-top: 10px; }
     /* Modal Stilleri */
-    #hackModal {
+    #hackModal, #adminModal {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.5); display: none;
       align-items: center; justify-content: center;
     }
-    #hackModal .modal-content {
+    #hackModal .modal-content,
+    #adminModal .modal-content {
       background: #fff; padding: 20px; border-radius: 4px; width: 300px; text-align: center;
     }
-    #hackModal button { margin: 10px; }
+    #hackModal button, #adminModal button { margin: 10px; }
   </style>
   <!-- Firebase SDK (compat sürümleri) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -58,7 +59,7 @@
     <h2>Merhaba, <span id="currentUserName"></span>!</h2>
     <p>Bakiye: \$<span id="currentUserBalance"></span></p>
 
-    <!-- Normal kullanıcılar için bölüm -->
+    <!-- Normal kullanıcılar için hack bölümü -->
     <div id="hackSection">
       <h3>Hackle</h3>
       <p>
@@ -68,12 +69,13 @@
       <div class="message" id="simMessage"></div>
     </div>
 
-    <!-- Admin paneli: Scoreboard, ceza ve ban işlemleri -->
+    <!-- Admin paneli -->
     <div id="adminPanel" class="hidden">
       <h3>Admin Paneli</h3>
-      <p>Admin olarak sisteme giriş yaptınız. Aşağıdan kullanıcıların durumunu yönetebilirsiniz.</p>
+      <p>Admin olarak sisteme giriş yaptınız. Aşağıdaki "Admin Panelini Aç" butonuna tıklayarak admin şifresini girip paneli açabilirsiniz.</p>
+      <button onclick="openAdminModal()">Admin Panelini Aç</button>
+      <div id="adminScoreboard" class="hidden"></div>
       <div class="message" id="adminMessage"></div>
-      <div id="adminScoreboard"></div>
     </div>
   </div>
 
@@ -83,6 +85,17 @@
       <h3>Hack Modu</h3>
       <div id="hackOptions"></div>
       <button onclick="cancelHack()">İptal</button>
+    </div>
+  </div>
+
+  <!-- Admin Şifre Modalı -->
+  <div id="adminModal">
+    <div class="modal-content">
+      <h3>Admin Paneli Açma</h3>
+      <p>Lütfen admin şifresini giriniz:</p>
+      <input type="password" id="adminPasswordInput" placeholder="Admin Şifresi">
+      <button onclick="verifyAdminPassword()">Onayla</button>
+      <button onclick="cancelAdmin()">İptal</button>
     </div>
   </div>
 
@@ -131,7 +144,7 @@
         authMessage.textContent = "Bu kullanıcı adı zaten alınmış.";
         return;
       }
-      // Eğer kullanıcı adı "admin" ise admin yetkisi ekle
+      // "admin" kullanıcı adı girilirse admin yetkisi eklenir.
       const isAdmin = username.toLowerCase() === "admin";
       await userRef.set({ password: password, balance: 1000, admin: isAdmin, banned: false });
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
@@ -179,7 +192,7 @@
       updateCurrentUserBalance();
       subscribeToUsers();
       if(currentUser.admin) {
-        // Admin için hack kısmı gizlenir, admin paneli gösterilir.
+        // Admin için: Önce hack bölümü gizlenir, admin paneli gösterilir.
         hackSection.classList.add("hidden");
         adminPanel.classList.remove("hidden");
       } else {
@@ -196,7 +209,7 @@
         snapshot.forEach(doc => {
           users.push({ username: doc.id, ...doc.data() });
         });
-        if(currentUser && currentUser.admin) {
+        if(currentUser && currentUser.admin && adminScoreboard.classList.contains("visible")) {
           renderAdminScoreboard(users);
         } else {
           renderUsersList(users);
@@ -332,7 +345,7 @@
       return array;
     }
 
-    // Firestore transaction ile hacker ve hedef hesaplarını güncelliyoruz.
+    // Firestore transaction ile normal kullanıcı için hacker ve hedef hesaplarını güncelliyoruz.
     async function processHackAnswer(selectedCode) {
       hideHackModal();
       simMessage.textContent = "İşlem yapılıyor...";
@@ -368,7 +381,28 @@
       }
     }
 
-    /***** Admin İşlemleri: Ceza Verme & Banlama *****/
+    /***** Admin Paneli İşlemleri *****/
+    // Admin paneline erişim için ayrı şifre modalı.
+    function openAdminModal() {
+      document.getElementById("adminModal").style.display = "flex";
+    }
+    function cancelAdmin() {
+      document.getElementById("adminModal").style.display = "none";
+    }
+    function verifyAdminPassword() {
+      const input = document.getElementById("adminPasswordInput").value;
+      // Admin panel şifresini buraya girin (örneğin "adminpass")
+      if(input === "adminpass") {
+        document.getElementById("adminModal").style.display = "none";
+        adminMessage.textContent = "Admin paneli açıldı.";
+        // Admin scoreboard bölümünü görünür yapıyoruz.
+        adminScoreboard.classList.add("visible");
+        adminScoreboard.classList.remove("hidden");
+      } else {
+        alert("Yanlış admin şifresi!");
+      }
+    }
+
     async function givePenalty(username) {
       try {
         const userRef = db.collection("users").doc(username);
