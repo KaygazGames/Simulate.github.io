@@ -20,7 +20,7 @@
     }
     header { 
       margin-bottom: 20px; 
-      display: flex;
+      display: flex; 
       justify-content: space-between;
       align-items: center;
     }
@@ -65,7 +65,7 @@
     .modal-content button {
       margin: 10px;
     }
-    /* Sağ üst köşede sabit admin paneli butonu */
+    /* Sağ üst köşede sabit admin butonu */
     #adminButton {
       position: fixed;
       top: 10px;
@@ -99,7 +99,7 @@
     <button id="logoutButton" class="hidden">Çıkış Yap</button>
   </header>
   
-  <!-- Sabit Admin Paneli Butonu (Admin işlemleri için şifre gerekecek) -->
+  <!-- Sabit Admin Butonu (Admin işlevlerini açmak için şifre gerekecek) -->
   <button id="adminButton" onclick="openAdminModal()">Admin Panelini Aç</button>
   
   <!-- Giriş / Kayıt Bölümü -->
@@ -126,7 +126,7 @@
     <h2>Merhaba, <span id="currentUserName"></span>!</h2>
     <p>Bakiye: $<span id="currentUserBalance"></span></p>
     
-    <!-- Hack Bölümü -->
+    <!-- Hack Bölümü (Normal Kullanıcı) -->
     <div id="hackSection">
       <h3>Hackle</h3>
       <p>
@@ -136,7 +136,7 @@
       <div class="message" id="simMessage"></div>
     </div>
     
-    <!-- Scoreboard (Herkese Açık) -->
+    <!-- Scoreboard / Admin Paneli (Herkese Açık) -->
     <div id="scoreboardSection" class="form-container">
       <h3>Scoreboard</h3>
       <div id="scoreboard"></div>
@@ -153,7 +153,7 @@
     </div>
   </div>
   
-  <!-- Admin Şifre Modalı (Admin paneli için şifre gerekecek) -->
+  <!-- Admin Şifre Modalı (Admin işlemleri için) -->
   <div id="adminModal">
     <div class="modal-content">
       <h3>Admin Panelini Aç</h3>
@@ -165,7 +165,7 @@
   </div>
   
   <script>
-    // Firebase yapılandırması – kendi bilgilerinizi buraya ekleyin
+    // Firebase yapılandırması – kendi bilgilerinizi ekleyin
     const firebaseConfig = {
       apiKey: "AIzaSyD1gL06NnTrToBUyyqWC8bnjfXlohLQzYM",
       authDomain: "hackstersw.firebaseapp.com",
@@ -189,7 +189,7 @@
     let currentUser = null;
     let currentHackTarget = null;
     let hackCorrectCode = "";
-    let adminVerified = false;  // Admin işlevlerini açmak için doğrulama
+    let adminVerified = false;  // Admin işlevleri görünmesi için doğrulama
     
     // Kayıt İşlemi
     document.getElementById("registerButton").addEventListener("click", async function() {
@@ -209,7 +209,7 @@
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
     
-    // Oturum Açma
+    // Oturum Açma İşlemi
     document.getElementById("loginButton").addEventListener("click", async function() {
       const username = document.getElementById("loginUsername").value.trim();
       const password = document.getElementById("loginPassword").value.trim();
@@ -220,7 +220,12 @@
           authMessage.textContent = "Bu hesap banlanmıştır.";
           return;
         }
-        currentUser = { username: username, balance: doc.data().balance };
+        currentUser = { 
+          username: username, 
+          balance: doc.data().balance,
+          muteUntil: doc.data().muteUntil || null,
+          banUntil: doc.data().banUntil || null
+        };
         authMessage.textContent = "";
         switchToSimulation();
       } else {
@@ -237,7 +242,7 @@
       authMessage.textContent = "";
       simMessage.textContent = "";
       adminVerified = false;
-      updateScoreboard([]); // Scoreboard güncellensin
+      updateScoreboard([]);
     });
     
     function switchToSimulation() {
@@ -262,25 +267,42 @@
       });
     }
     
-    // Scoreboard: Herkes için görünen tablo; admin işlevleri adminVerified true ise eklenir.
+    // Scoreboard – Eğer adminVerified true ise ekstra sütunlar (Ceza, Banla, Banı Aç, Hack Mute, Hesap Sil) eklenir.
     function updateScoreboard(users) {
       let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye ($)</th><th>Durum</th>';
       if (adminVerified) {
-        html += '<th>Ceza Ver</th><th>Banla</th>';
+        html += '<th>Ceza Ver</th><th>Banla</th><th>Banı Aç</th><th>Hack Mute</th><th>Hesap Sil</th>';
       }
       html += '</tr>';
       users.forEach(u => {
-        html += `<tr>
-                   <td>${u.username}</td>
-                   <td>${u.balance}${u.banned ? " (BAN)" : ""}</td>
-                   <td>${u.banned ? "Banlı" : "Aktif"}</td>`;
+        html += '<tr>';
+        html += `<td>${u.username}</td>`;
+        html += `<td>${u.balance}</td>`;
+        if (u.banned && u.banUntil) {
+          let remaining = Math.max(0, Math.floor((new Date(u.banUntil).getTime() - Date.now()) / 60000));
+          html += `<td>Banlı (${remaining} dk)</td>`;
+        } else {
+          html += `<td>Aktif</td>`;
+        }
         if (adminVerified) {
-          if(u.username !== currentUser.username) {
-            html += `<td><button onclick="givePenalty('${u.username}')">Ceza (100$)</button></td>
-                     <td>${u.banned ? "Zaten Banlı" : `<button onclick="banUser('${u.username}')">Banla</button>`}</td>`;
+          // Ceza Ver butonu
+          html += `<td><button onclick="givePenalty('${u.username}')">Ceza (100$)</button></td>`;
+          // Banla butonu (eğer banlı değilse)
+          if (!u.banned) {
+            html += `<td><button onclick="banUser('${u.username}')">Banla</button></td>`;
           } else {
-            html += `<td></td><td></td>`;
+            html += `<td></td>`;
           }
+          // Banı Aç butonu (eğer banlıysa)
+          if (u.banned) {
+            html += `<td><button onclick="unbanUser('${u.username}')">Banı Aç</button></td>`;
+          } else {
+            html += `<td></td>`;
+          }
+          // Hack Mute butonu
+          html += `<td><button onclick="muteUser('${u.username}')">Hack Mute</button></td>`;
+          // Hesap Sil butonu
+          html += `<td><button onclick="deleteUser('${u.username}')">Hesap Sil</button></td>`;
         }
         html += '</tr>';
       });
@@ -317,6 +339,8 @@
       const user = users.find(u => u.username === currentUser.username);
       if (user) {
         currentUser.balance = user.balance;
+        currentUser.muteUntil = user.muteUntil || null;
+        currentUser.banUntil = user.banUntil || null;
         currentUserBalanceSpan.textContent = user.balance;
       }
     }
@@ -324,6 +348,8 @@
       db.collection("users").doc(currentUser.username).get().then(doc => {
         if (doc.exists) {
           currentUser.balance = doc.data().balance;
+          currentUser.muteUntil = doc.data().muteUntil || null;
+          currentUser.banUntil = doc.data().banUntil || null;
           currentUserBalanceSpan.textContent = doc.data().balance;
         }
       });
@@ -334,6 +360,14 @@
       if (currentUser.balance < 100) {
         simMessage.textContent = "Hackleme ücreti için yetersiz bakiye!";
         return;
+      }
+      // Hack mute kontrolü
+      if (currentUser.muteUntil) {
+        let muteUntilTime = new Date(currentUser.muteUntil).getTime();
+        if (Date.now() < muteUntilTime) {
+          simMessage.textContent = "Hack mute aktif. Lütfen daha sonra tekrar deneyiniz.";
+          return;
+        }
       }
       currentHackTarget = targetUsername;
       showHackModal();
@@ -411,8 +445,7 @@
       }
     }
     
-    // Admin Paneli – Admin işlemleri yalnızca adminVerified true olduğunda görünür.
-    // Admin panelinin şifreli kısmı için "Admin Panelini Aç" butonuna tıklandığında açılan modalı kullanıyoruz.
+    // Admin İşlevleri – Scoreboard’da ek sütunlar admin şifresi doğrulandığında görünür
     function openAdminModal() {
       document.getElementById("adminModal").style.display = "flex";
     }
@@ -421,12 +454,12 @@
     }
     function verifyAdminPassword() {
       const input = document.getElementById("adminPasswordInput").value;
-      // Admin şifresi "Bilmem" olsun.
+      // Admin şifresi: "Bilmem"
       if (input === "Bilmem") {
         document.getElementById("adminModal").style.display = "none";
         adminMessage.textContent = "Admin işlevleri aktif.";
         adminVerified = true;
-        subscribeToUsers();  // Scoreboard güncellensin, admin işlevleri eklensin.
+        subscribeToUsers();  // Scoreboard yeniden güncellensin
       } else {
         adminMessage.textContent = "Yanlış admin şifresi!";
         adminVerified = false;
@@ -450,13 +483,39 @@
       }
     }
     
-    async function banUser(username) {
-      try {
-        const userRef = db.collection("users").doc(username);
-        await userRef.update({ banned: true });
-        adminMessage.textContent = "Kullanıcı başarıyla banlandı.";
-      } catch (error) {
-        adminMessage.textContent = "Ban işlemi başarısız: " + error;
+    function banUser(username) {
+      let duration = prompt("Ban süresi dakikası giriniz (örneğin: 1, 10, 120):");
+      if (duration != null) {
+        let minutes = parseInt(duration);
+        if (isNaN(minutes) || minutes <= 0) {
+          alert("Geçersiz süre");
+          return;
+        }
+        let banUntil = new Date(Date.now() + minutes * 60000);
+        db.collection("users").doc(username).update({ banned: true, banUntil: banUntil });
+      }
+    }
+    
+    function unbanUser(username) {
+      db.collection("users").doc(username).update({ banned: false, banUntil: null });
+    }
+    
+    function deleteUser(username) {
+      if (confirm("Bu kullanıcıyı silmek istediğinize emin misiniz?")) {
+        db.collection("users").doc(username).delete();
+      }
+    }
+    
+    function muteUser(username) {
+      let duration = prompt("Hack mute süresi dakikası giriniz (örneğin: 1, 10, 120):");
+      if (duration != null) {
+        let minutes = parseInt(duration);
+        if (isNaN(minutes) || minutes <= 0) {
+          alert("Geçersiz süre");
+          return;
+        }
+        let muteUntil = new Date(Date.now() + minutes * 60000);
+        db.collection("users").doc(username).update({ muteUntil: muteUntil });
       }
     }
   </script>
