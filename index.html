@@ -24,7 +24,7 @@
     }
     #hackModal button { margin: 10px; }
   </style>
-  <!-- Firebase SDK (compat sürümleri daha kolay entegrasyon için) -->
+  <!-- Firebase SDK (compat sürümleri) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
@@ -61,12 +61,22 @@
     <h3>Tüm Kullanıcılar</h3>
     <div id="usersList"></div>
 
-    <h3>Hackle</h3>
-    <p>
-      İşlem ücreti 100 \$'dır. Hack moduna girdikten sonra, geri dönüşüm hakkında sorulan soruya doğru cevabı verirseniz hedef hesaptan 100 \$ çalınır, yanlış cevaba basılırsa 100 \$ ceza uygulanır.
-    </p>
-    <div id="hackTargetArea"></div>
-    <div class="message" id="simMessage"></div>
+    <!-- Normal kullanıcılar için hack kısmı -->
+    <div id="hackSection">
+      <h3>Hackle</h3>
+      <p>
+        İşlem ücreti 100 \$'dır. Hack moduna girdikten sonra, geri dönüşümle ilgili soruya doğru cevabı verirseniz hedef hesaptan 100 \$ çalınır; yanlış cevap seçilirse 100 \$ ceza uygulanır.
+      </p>
+      <div id="hackTargetArea"></div>
+      <div class="message" id="simMessage"></div>
+    </div>
+
+    <!-- Admin için ayrı mesaj -->
+    <div id="adminPanel" class="hidden">
+      <h3>Admin Paneli</h3>
+      <p>Admin hesap hack işlemi yapamaz. Tüm kullanıcıların bakiyelerini ve işlemleri görüntüleyebilirsiniz.</p>
+      <div class="message" id="adminMessage"></div>
+    </div>
   </div>
 
   <!-- Hack Modal (Özel Hack Ekranı) -->
@@ -80,7 +90,7 @@
 
   <script>
     /***** Firebase Başlatma *****/
-    // Aşağıdaki yapılandırma bilgilerini kendi Firebase projenizden alıp ekleyin.
+    // Kendi Firebase yapılandırma bilgilerinizi buraya ekleyin.
     const firebaseConfig = {
       apiKey: "AIzaSyD1gL06NnTrToBUyyqWC8bnjfXlohLQzYM",
       authDomain: "hackstersw.firebaseapp.com",
@@ -100,6 +110,9 @@
     const usersListDiv = document.getElementById("usersList");
     const hackTargetArea = document.getElementById("hackTargetArea");
     const logoutButton = document.getElementById("logoutButton");
+    const hackSection = document.getElementById("hackSection");
+    const adminPanel = document.getElementById("adminPanel");
+    const adminMessage = document.getElementById("adminMessage");
 
     let currentUser = null;
     let currentHackTarget = null;
@@ -119,7 +132,9 @@
         authMessage.textContent = "Bu kullanıcı adı zaten alınmış.";
         return;
       }
-      await userRef.set({ password: password, balance: 1000 });
+      // Eğer kullanıcı adı "admin" ise admin yetkisi ekle
+      const isAdmin = username.toLowerCase() === "admin";
+      await userRef.set({ password: password, balance: 1000, admin: isAdmin });
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
 
@@ -130,7 +145,11 @@
       const userRef = db.collection("users").doc(username);
       const doc = await userRef.get();
       if(doc.exists && doc.data().password === password) {
-        currentUser = { username: username, balance: doc.data().balance };
+        currentUser = { 
+          username: username, 
+          balance: doc.data().balance, 
+          admin: doc.data().admin || false 
+        };
         authMessage.textContent = "";
         switchToSimulation();
       } else {
@@ -156,7 +175,16 @@
       currentUserNameSpan.textContent = currentUser.username;
       updateCurrentUserBalance();
       subscribeToUsers();
-      updateHackTargetArea();
+      // Admin ise hack bölümünü gizle, admin panelini göster.
+      if(currentUser.admin) {
+        hackSection.classList.add("hidden");
+        adminPanel.classList.remove("hidden");
+        adminMessage.textContent = "Admin olarak sisteme giriş yaptınız. Hack işlemi yapılamaz.";
+      } else {
+        hackSection.classList.remove("hidden");
+        adminPanel.classList.add("hidden");
+        updateHackTargetArea();
+      }
     }
 
     /***** Gerçek Zamanlı Senkronizasyon *****/
@@ -168,7 +196,9 @@
         });
         renderUsersList(users);
         updateCurrentUserBalanceFromSnapshot(users);
-        updateHackTargetArea(users);
+        if(!currentUser.admin) {
+          updateHackTargetArea(users);
+        }
       });
     }
 
@@ -180,7 +210,7 @@
           html += `<tr>
                      <td>${u.username}</td>
                      <td>${u.balance}</td>
-                     <td><button onclick="initHack('${u.username}')">Hackle (100\$)</button></td>
+                     <td>${ currentUser.admin ? "" : `<button onclick="initHack('${u.username}')">Hackle (100\$)</button>` }</td>
                    </tr>`;
         }
       });
@@ -231,7 +261,7 @@
     }
 
     /***** Hack İşlemleri *****/
-    // Hack girişiminde, işlem ücreti kontrolü yapıldıktan sonra özel hack ekranı (modal) açılır.
+    // Normal kullanıcılar için hack moduna geçiş:
     function initHack(targetUsername) {
       if(currentUser.balance < 100) {
         simMessage.textContent = "Hackleme ücreti için yetersiz bakiye!";
@@ -240,11 +270,10 @@
       currentHackTarget = targetUsername;
       showHackModal();
     }
-    // Hack modalunda artık geri dönüşümle ilgili soru soruluyor.
+    // Hack modalunda geri dönüşüm sorusu soruluyor.
     function showHackModal() {
       const modal = document.getElementById("hackModal");
       const hackOptionsDiv = document.getElementById("hackOptions");
-      // Geri dönüşüm sorusu tanımı
       const recyclingQuestion = {
         question: "Geri dönüşümün temel faydası nedir?",
         options: [
@@ -255,9 +284,7 @@
         ],
         correct: "Kaynak tasarrufu sağlar"
       };
-      // Doğru cevabı global değişkene ata
       hackCorrectCode = recyclingQuestion.correct;
-      // Seçenekleri karıştır
       const options = shuffleArray(recyclingQuestion.options.slice());
       let html = `<p>${recyclingQuestion.question}</p>`;
       options.forEach(option => {
@@ -284,7 +311,7 @@
       return array;
     }
 
-    // İşlem sırasında Firestore transaction kullanarak, hacker ve hedef hesapları güncelliyoruz.
+    // Firestore transaction kullanılarak hacker ve hedef hesapları güncelleniyor.
     async function processHackAnswer(selectedCode) {
       hideHackModal();
       simMessage.textContent = "İşlem yapılıyor...";
@@ -302,10 +329,9 @@
           if(hackerBalance < 100) {
             throw "Yetersiz bakiye!";
           }
-          // İşlem ücreti 100$ kesiliyor.
+          // İşlem ücreti 100\$ kesiliyor.
           hackerBalance -= 100;
           if(selectedCode === hackCorrectCode) {
-            // Doğru cevap: hedef hesaptan 100$ çalınıyor (yeterli bakiye varsa)
             const stealAmount = targetBalance >= 100 ? 100 : targetBalance;
             targetBalance -= stealAmount;
             hackerBalance += stealAmount;
