@@ -2,13 +2,13 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>Hackster.io</title>
+  <title>Senkranize Banka & Hacker Simülatörü</title>
   <style>
     body { 
       font-family: Arial, sans-serif; 
       background-color: #f4f4f4; 
-      padding: 20px; 
-      margin: 0;
+      margin: 0; 
+      padding: 20px;
     }
     .hidden { display: none; }
     input, button { padding: 10px; margin: 5px; }
@@ -63,7 +63,7 @@
       text-align: center;
     }
     #hackModal button, #adminModal button { margin: 10px; }
-    /* Admin Butonu: Fixed ve sağ üst köşede */
+    /* Admin Butonu: Fixed sağ üst köşe */
     #adminButton {
       position: fixed;
       top: 10px;
@@ -86,10 +86,9 @@
   <header>
     <h1>Senkranize Banka & Hacker Simülatörü</h1>
     <button id="logoutButton" class="hidden">Çıkış Yap</button>
+    <!-- Sağ üstte sabit admin paneli butonu -->
+    <button id="adminButton" onclick="openAdminModal()">Admin Paneline Geç</button>
   </header>
-
-  <!-- Sabit Admin Butonu -->
-  <button id="adminButton" onclick="openAdminModal()">Admin Paneline Geç</button>
 
   <!-- Giriş / Kayıt Bölümü -->
   <div id="auth-section" class="form-container">
@@ -115,11 +114,11 @@
     <h2>Merhaba, <span id="currentUserName"></span>!</h2>
     <p>Bakiye: \$<span id="currentUserBalance"></span></p>
 
-    <!-- Normal Kullanıcı Hack Bölümü (Her zaman görünür) -->
+    <!-- Normal Kullanıcı Hack Bölümü -->
     <div id="hackSection">
       <h3>Hackle</h3>
       <p>
-        İşlem ücreti 100 \$'dır. Hack moduna girdikten sonra, geri dönüşümle ilgili soruya doğru cevabı verirseniz, hedef hesaptan 100 \$ çalınır; yanlış cevapta 100 \$ ceza uygulanır.
+        İşlem ücreti 100 \$'dır. Hack moduna girdikten sonra, geri dönüşümle ilgili soruya doğru cevabı verirseniz hedef hesaptan 100 \$ çalınır; yanlış cevapta 100 \$ ceza uygulanır.
       </p>
       <div id="hackTargetArea"></div>
       <div class="message" id="simMessage"></div>
@@ -133,7 +132,7 @@
     </div>
   </div>
 
-  <!-- Hack Modal (Özel Hack Ekranı) -->
+  <!-- Hack Modal -->
   <div id="hackModal">
     <div class="modal-content">
       <h3>Hack Modu</h3>
@@ -155,7 +154,6 @@
 
   <script>
     /***** Firebase Başlatma *****/
-    // Kendi Firebase yapılandırma bilgilerinizi buraya ekleyin.
     const firebaseConfig = {
       apiKey: "AIzaSyD1gL06NnTrToBUyyqWC8bnjfXlohLQzYM",
       authDomain: "hackstersw.firebaseapp.com",
@@ -199,12 +197,12 @@
         authMessage.textContent = "Bu kullanıcı adı zaten alınmış.";
         return;
       }
-      // Her kullanıcı için aynı kayıt; admin yetkisi burada tanımlanmıyor.
+      // Her kullanıcı için aynı kayıt (admin yetkisi ayrım yok)
       await userRef.set({ password: password, balance: 1000, banned: false });
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
 
-    /***** Oturum Açma İşlemleri *****/
+    /***** Oturum Açma *****/
     document.getElementById("loginButton").addEventListener("click", async function() {
       const username = document.getElementById("loginUsername").value.trim();
       const password = document.getElementById("loginPassword").value.trim();
@@ -247,7 +245,7 @@
       currentUserNameSpan.textContent = currentUser.username;
       updateCurrentUserBalance();
       subscribeToUsers();
-      // Hack bölümü herkes için görünür.
+      // Normal hack işlemleri her kullanıcı için görünür.
       hackSection.classList.remove("hidden");
     }
 
@@ -352,7 +350,6 @@
       currentHackTarget = targetUsername;
       showHackModal();
     }
-    // Hack modalunda geri dönüşüm sorusu soruluyor.
     function showHackModal() {
       const modal = document.getElementById("hackModal");
       const hackOptionsDiv = document.getElementById("hackOptions");
@@ -392,8 +389,6 @@
       }
       return array;
     }
-
-    // Firestore transaction ile hack işlemi gerçekleştiriliyor.
     async function processHackAnswer(selectedCode) {
       hideHackModal();
       simMessage.textContent = "İşlem yapılıyor...";
@@ -430,7 +425,6 @@
     }
 
     /***** Admin Paneli İşlemleri *****/
-    // "Admin Paneline Geç" butonuna tıklandığında admin şifre modalı açılır.
     function openAdminModal() {
       document.getElementById("adminModal").style.display = "flex";
     }
@@ -439,7 +433,7 @@
     }
     function verifyAdminPassword() {
       const input = document.getElementById("adminPasswordInput").value;
-      // Admin panel şifresi "Bilmem" olsun.
+      // Admin panel şifresi: "Bilmem"
       if (input === "Bilmem") {
         document.getElementById("adminModal").style.display = "none";
         adminMessage.textContent = "Admin paneli açıldı.";
@@ -452,7 +446,6 @@
         adminPanelOpen = false;
       }
     }
-
     async function givePenalty(username) {
       try {
         const userRef = db.collection("users").doc(username);
@@ -468,7 +461,6 @@
         adminMessage.textContent = "Ceza uygulanamadı: " + error;
       }
     }
-
     async function banUser(username) {
       try {
         const userRef = db.collection("users").doc(username);
