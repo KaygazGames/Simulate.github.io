@@ -59,21 +59,22 @@
     <h2>Merhaba, <span id="currentUserName"></span>!</h2>
     <p>Bakiye: \$<span id="currentUserBalance"></span></p>
 
-    <!-- Normal kullanıcılar için hack bölümü -->
+    <!-- Normal Kullanıcılar için Hack Bölümü -->
     <div id="hackSection">
       <h3>Hackle</h3>
       <p>
-        İşlem ücreti 100 \$'dır. Hack moduna girdikten sonra, geri dönüşümle ilgili soruya doğru cevabı verirseniz hedef hesaptan 100 \$ çalınır; yanlış cevap seçilirse 100 \$ ceza uygulanır.
+        İşlem ücreti 100 \$'dır. Hack moduna girdikten sonra, geri dönüşümle ilgili soruya doğru cevabı verirseniz hedef hesaptan 100 \$ çalınır; yanlış cevapta 100 \$ ceza uygulanır.
       </p>
       <div id="hackTargetArea"></div>
       <div class="message" id="simMessage"></div>
     </div>
 
-    <!-- Admin paneli -->
-    <div id="adminPanel" class="hidden">
+    <!-- Herkese Açık Admin Paneli -->
+    <div id="adminPanel" class="form-container">
       <h3>Admin Paneli</h3>
-      <p>Admin olarak sisteme giriş yaptınız. Aşağıdaki "Admin Panelini Aç" butonuna tıklayarak admin şifresini girip paneli açabilirsiniz.</p>
+      <p>Admin paneline erişmek için aşağıdaki "Admin Panelini Aç" butonuna tıklayıp admin şifresini giriniz.</p>
       <button onclick="openAdminModal()">Admin Panelini Aç</button>
+      <!-- Admin paneli açıldığında scoreboard burada görünecek -->
       <div id="adminScoreboard" class="hidden"></div>
       <div class="message" id="adminMessage"></div>
     </div>
@@ -129,6 +130,7 @@
     let currentUser = null;
     let currentHackTarget = null;
     let hackCorrectCode = "";
+    let adminPanelOpen = false;  // Admin panelin açık olup olmadığını tutar
 
     /***** Kayıt İşlemleri *****/
     document.getElementById("registerButton").addEventListener("click", async function() {
@@ -144,9 +146,8 @@
         authMessage.textContent = "Bu kullanıcı adı zaten alınmış.";
         return;
       }
-      // "admin" kullanıcı adı girilirse admin yetkisi eklenir.
-      const isAdmin = username.toLowerCase() === "admin";
-      await userRef.set({ password: password, balance: 1000, admin: isAdmin, banned: false });
+      // Herhangi bir kullanıcı kayıt olur, admin yetkisi burada tanımlanmıyor.
+      await userRef.set({ password: password, balance: 1000, banned: false });
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
 
@@ -163,8 +164,7 @@
         }
         currentUser = { 
           username: username, 
-          balance: doc.data().balance, 
-          admin: doc.data().admin || false 
+          balance: doc.data().balance
         };
         authMessage.textContent = "";
         switchToSimulation();
@@ -181,6 +181,10 @@
       logoutButton.classList.add("hidden");
       authMessage.textContent = "";
       simMessage.textContent = "";
+      // Admin paneli kapalı olsun.
+      adminPanelOpen = false;
+      adminScoreboard.classList.add("hidden");
+      adminMessage.textContent = "";
     });
 
     /***** Simülasyon Ekranına Geçiş *****/
@@ -191,15 +195,8 @@
       currentUserNameSpan.textContent = currentUser.username;
       updateCurrentUserBalance();
       subscribeToUsers();
-      if(currentUser.admin) {
-        // Admin için: Önce hack bölümü gizlenir, admin paneli gösterilir.
-        hackSection.classList.add("hidden");
-        adminPanel.classList.remove("hidden");
-      } else {
-        hackSection.classList.remove("hidden");
-        adminPanel.classList.add("hidden");
-        updateHackTargetArea();
-      }
+      // Hem hack bölümü hem de admin paneli herkese açık; admin paneli için ayrı şifre girilecek.
+      hackSection.classList.remove("hidden");
     }
 
     /***** Gerçek Zamanlı Senkronizasyon *****/
@@ -209,12 +206,12 @@
         snapshot.forEach(doc => {
           users.push({ username: doc.id, ...doc.data() });
         });
-        if(currentUser && currentUser.admin && adminScoreboard.classList.contains("visible")) {
+        renderUsersList(users);
+        updateCurrentUserBalanceFromSnapshot(users);
+        updateHackTargetArea(users);
+        // Eğer admin paneli açılmışsa, scoreboard'ı güncelle.
+        if(adminPanelOpen) {
           renderAdminScoreboard(users);
-        } else {
-          renderUsersList(users);
-          updateCurrentUserBalanceFromSnapshot(users);
-          updateHackTargetArea(users);
         }
       });
     }
@@ -345,7 +342,7 @@
       return array;
     }
 
-    // Firestore transaction ile normal kullanıcı için hacker ve hedef hesaplarını güncelliyoruz.
+    // Firestore transaction ile normal kullanıcı için hack işlemleri gerçekleştiriliyor.
     async function processHackAnswer(selectedCode) {
       hideHackModal();
       simMessage.textContent = "İşlem yapılıyor...";
@@ -363,7 +360,7 @@
           if(hackerBalance < 100) {
             throw "Yetersiz bakiye!";
           }
-          // İşlem ücreti 100\$ kesiliyor.
+          // İşlem ücreti 100$ kesiliyor.
           hackerBalance -= 100;
           if(selectedCode === hackCorrectCode) {
             const stealAmount = targetBalance >= 100 ? 100 : targetBalance;
@@ -382,7 +379,7 @@
     }
 
     /***** Admin Paneli İşlemleri *****/
-    // Admin paneline erişim için ayrı şifre modalı.
+    // Admin paneline erişmek için "Admin Panelini Aç" butonuna tıklandığında admin şifre modalı açılır.
     function openAdminModal() {
       document.getElementById("adminModal").style.display = "flex";
     }
@@ -391,15 +388,16 @@
     }
     function verifyAdminPassword() {
       const input = document.getElementById("adminPasswordInput").value;
-      // Admin panel şifresini buraya girin (örneğin "adminpass")
+      // Admin panel şifresi: "adminpass"
       if(input === "adminpass") {
         document.getElementById("adminModal").style.display = "none";
         adminMessage.textContent = "Admin paneli açıldı.";
-        // Admin scoreboard bölümünü görünür yapıyoruz.
-        adminScoreboard.classList.add("visible");
         adminScoreboard.classList.remove("hidden");
+        adminPanelOpen = true;
       } else {
-        alert("Yanlış admin şifresi!");
+        adminMessage.textContent = "Yanlış admin şifresi!";
+        adminScoreboard.classList.add("hidden");
+        adminPanelOpen = false;
       }
     }
 
