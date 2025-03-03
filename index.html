@@ -11,7 +11,12 @@
     th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
     th { background-color: #333; color: #fff; }
     .form-container { background: #fff; padding: 15px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 20px; }
-    header { display: flex; justify-content: space-between; align-items: center; }
+    header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      position: relative;
+    }
     .message { padding: 10px; background: #e7e7e7; border-left: 5px solid #333; margin-top: 10px; }
     /* Modal Stilleri */
     #hackModal, #adminModal {
@@ -24,16 +29,18 @@
       background: #fff; padding: 20px; border-radius: 4px; width: 300px; text-align: center;
     }
     #hackModal button, #adminModal button { margin: 10px; }
-    /* Admin Panel Butonu */
-    #goToAdminBtn {
-      padding: 12px 20px;
+    /* Admin Butonu Köşede */
+    #adminButton {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 8px 16px;
       background-color: #333;
       color: #fff;
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 16px;
-      margin-top: 20px;
+      font-size: 14px;
     }
   </style>
   <!-- Firebase SDK (compat sürümleri) -->
@@ -44,6 +51,8 @@
   <header>
     <h1>Senkranize Banka & Hacker Simülatörü</h1>
     <button id="logoutButton" class="hidden">Çıkış Yap</button>
+    <!-- Admin Paneline Geç Butonu, header'ın sağ üst köşesinde -->
+    <button id="adminButton" onclick="openAdminModal()">Admin Paneline Geç</button>
   </header>
 
   <!-- Giriş / Kayıt Bölümü -->
@@ -70,7 +79,7 @@
     <h2>Merhaba, <span id="currentUserName"></span>!</h2>
     <p>Bakiye: \$<span id="currentUserBalance"></span></p>
 
-    <!-- Normal Kullanıcı Hack Bölümü -->
+    <!-- Normal Kullanıcı Hack Bölümü (Her zaman görünür) -->
     <div id="hackSection">
       <h3>Hackle</h3>
       <p>
@@ -79,9 +88,6 @@
       <div id="hackTargetArea"></div>
       <div class="message" id="simMessage"></div>
     </div>
-
-    <!-- Herkese Açık Admin Paneli Butonu -->
-    <button id="goToAdminBtn" onclick="openAdminModal()">Admin Paneline Geç</button>
 
     <!-- Admin Paneli: Scoreboard ve Yönetim İşlemleri (Başlangıçta gizli) -->
     <div id="adminPanel" class="form-container hidden">
@@ -137,7 +143,6 @@
     const adminPanel = document.getElementById("adminPanel");
     const adminMessage = document.getElementById("adminMessage");
     const adminScoreboard = document.getElementById("adminScoreboard");
-    const goToAdminBtn = document.getElementById("goToAdminBtn");
 
     let currentUser = null;
     let currentHackTarget = null;
@@ -148,13 +153,13 @@
     document.getElementById("registerButton").addEventListener("click", async function() {
       const username = document.getElementById("regUsername").value.trim();
       const password = document.getElementById("regPassword").value.trim();
-      if(!username || !password) {
+      if (!username || !password) {
         authMessage.textContent = "Lütfen tüm alanları doldurun.";
         return;
       }
       const userRef = db.collection("users").doc(username);
       const doc = await userRef.get();
-      if(doc.exists) {
+      if (doc.exists) {
         authMessage.textContent = "Bu kullanıcı adı zaten alınmış.";
         return;
       }
@@ -169,8 +174,8 @@
       const password = document.getElementById("loginPassword").value.trim();
       const userRef = db.collection("users").doc(username);
       const doc = await userRef.get();
-      if(doc.exists && doc.data().password === password) {
-        if(doc.data().banned) {
+      if (doc.exists && doc.data().password === password) {
+        if (doc.data().banned) {
           authMessage.textContent = "Bu hesap banlanmıştır.";
           return;
         }
@@ -206,7 +211,7 @@
       currentUserNameSpan.textContent = currentUser.username;
       updateCurrentUserBalance();
       subscribeToUsers();
-      // Hack bölümü her kullanıcı için görünür.
+      // Hack bölümü herkes için görünür.
       hackSection.classList.remove("hidden");
     }
 
@@ -220,7 +225,7 @@
         renderUsersList(users);
         updateCurrentUserBalanceFromSnapshot(users);
         updateHackTargetArea(users);
-        if(adminPanelOpen) {
+        if (adminPanelOpen) {
           renderAdminScoreboard(users);
         }
       });
@@ -230,7 +235,7 @@
     function renderUsersList(users) {
       let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye (\$)</th><th>İşlem</th></tr>';
       users.forEach(u => {
-        if(u.username !== currentUser.username) {
+        if (u.username !== currentUser.username) {
           html += `<tr>
                      <td>${u.username}</td>
                      <td>${u.balance}${u.banned ? " (BAN)" : ""}</td>
@@ -246,7 +251,7 @@
     function renderAdminScoreboard(users) {
       let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye (\$)</th><th>Durum</th><th>Ceza Ver</th><th>Banla</th></tr>';
       users.forEach(u => {
-        if(u.username !== currentUser.username) {
+        if (u.username !== currentUser.username) {
           html += `<tr>
                      <td>${u.username}</td>
                      <td>${u.balance}</td>
@@ -262,7 +267,7 @@
 
     /***** Hack Hedefi Seçim Alanı (Normal Kullanıcı) *****/
     function updateHackTargetArea(users = null) {
-      if(!users) {
+      if (!users) {
         db.collection("users").get().then(snapshot => {
           let userArr = [];
           snapshot.forEach(doc => {
@@ -277,7 +282,7 @@
     function renderHackTargetArea(users) {
       let html = '<select id="targetSelect">';
       users.forEach(u => {
-        if(u.username !== currentUser.username) {
+        if (u.username !== currentUser.username) {
           html += `<option value="${u.username}">${u.username}</option>`;
         }
       });
@@ -288,14 +293,14 @@
     /***** Bakiye Güncelleme *****/
     function updateCurrentUserBalanceFromSnapshot(users) {
       const user = users.find(u => u.username === currentUser.username);
-      if(user) {
+      if (user) {
         currentUser.balance = user.balance;
         currentUserBalanceSpan.textContent = user.balance;
       }
     }
     function updateCurrentUserBalance() {
       db.collection("users").doc(currentUser.username).get().then(doc => {
-        if(doc.exists) {
+        if (doc.exists) {
           currentUser.balance = doc.data().balance;
           currentUserBalanceSpan.textContent = doc.data().balance;
         }
@@ -304,7 +309,7 @@
 
     /***** Hack İşlemleri (Normal Kullanıcı) *****/
     function initHack(targetUsername) {
-      if(currentUser.balance < 100) {
+      if (currentUser.balance < 100) {
         simMessage.textContent = "Hackleme ücreti için yetersiz bakiye!";
         return;
       }
@@ -362,17 +367,17 @@
         await db.runTransaction(async (transaction) => {
           const hackerDoc = await transaction.get(hackerRef);
           const targetDoc = await transaction.get(targetRef);
-          if(!hackerDoc.exists || !targetDoc.exists) {
+          if (!hackerDoc.exists || !targetDoc.exists) {
             throw "Kullanıcı bulunamadı!";
           }
           let hackerBalance = hackerDoc.data().balance;
           let targetBalance = targetDoc.data().balance;
-          if(hackerBalance < 100) {
+          if (hackerBalance < 100) {
             throw "Yetersiz bakiye!";
           }
-          // İşlem ücreti 100\$ kesiliyor.
+          // İşlem ücreti 100$ kesiliyor.
           hackerBalance -= 100;
-          if(selectedCode === hackCorrectCode) {
+          if (selectedCode === hackCorrectCode) {
             const stealAmount = targetBalance >= 100 ? 100 : targetBalance;
             targetBalance -= stealAmount;
             hackerBalance += stealAmount;
@@ -399,10 +404,11 @@
     function verifyAdminPassword() {
       const input = document.getElementById("adminPasswordInput").value;
       // Admin panel şifresi "Bilmem" olsun.
-      if(input === "Bilmem") {
+      if (input === "Bilmem") {
         document.getElementById("adminModal").style.display = "none";
         adminMessage.textContent = "Admin paneli açıldı.";
         adminScoreboard.classList.remove("hidden");
+        adminPanel.classList.remove("hidden"); // Paneli görünür yapıyoruz.
         adminPanelOpen = true;
       } else {
         adminMessage.textContent = "Yanlış admin şifresi!";
@@ -418,7 +424,7 @@
           const userDoc = await transaction.get(userRef);
           if (!userDoc.exists) throw "Kullanıcı bulunamadı!";
           let newBalance = userDoc.data().balance - 100;
-          if(newBalance < 0) newBalance = 0;
+          if (newBalance < 0) newBalance = 0;
           transaction.update(userRef, { balance: newBalance });
         });
         adminMessage.textContent = "Ceza başarıyla uygulandı.";
