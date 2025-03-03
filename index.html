@@ -58,10 +58,7 @@
     <h2>Merhaba, <span id="currentUserName"></span>!</h2>
     <p>Bakiye: \$<span id="currentUserBalance"></span></p>
 
-    <h3>Tüm Kullanıcılar</h3>
-    <div id="usersList"></div>
-
-    <!-- Normal kullanıcılar için hack kısmı -->
+    <!-- Normal kullanıcılar için bölüm -->
     <div id="hackSection">
       <h3>Hackle</h3>
       <p>
@@ -71,11 +68,12 @@
       <div class="message" id="simMessage"></div>
     </div>
 
-    <!-- Admin için ayrı mesaj -->
+    <!-- Admin paneli: Scoreboard, ceza ve ban işlemleri -->
     <div id="adminPanel" class="hidden">
       <h3>Admin Paneli</h3>
-      <p>Admin hesap hack işlemi yapamaz. Tüm kullanıcıların bakiyelerini ve işlemleri görüntüleyebilirsiniz.</p>
+      <p>Admin olarak sisteme giriş yaptınız. Aşağıdan kullanıcıların durumunu yönetebilirsiniz.</p>
       <div class="message" id="adminMessage"></div>
+      <div id="adminScoreboard"></div>
     </div>
   </div>
 
@@ -113,6 +111,7 @@
     const hackSection = document.getElementById("hackSection");
     const adminPanel = document.getElementById("adminPanel");
     const adminMessage = document.getElementById("adminMessage");
+    const adminScoreboard = document.getElementById("adminScoreboard");
 
     let currentUser = null;
     let currentHackTarget = null;
@@ -134,7 +133,7 @@
       }
       // Eğer kullanıcı adı "admin" ise admin yetkisi ekle
       const isAdmin = username.toLowerCase() === "admin";
-      await userRef.set({ password: password, balance: 1000, admin: isAdmin });
+      await userRef.set({ password: password, balance: 1000, admin: isAdmin, banned: false });
       authMessage.textContent = "Kayıt başarılı! Artık oturum açabilirsiniz.";
     });
 
@@ -145,6 +144,10 @@
       const userRef = db.collection("users").doc(username);
       const doc = await userRef.get();
       if(doc.exists && doc.data().password === password) {
+        if(doc.data().banned) {
+          authMessage.textContent = "Bu hesap banlanmıştır.";
+          return;
+        }
         currentUser = { 
           username: username, 
           balance: doc.data().balance, 
@@ -175,11 +178,10 @@
       currentUserNameSpan.textContent = currentUser.username;
       updateCurrentUserBalance();
       subscribeToUsers();
-      // Admin ise hack bölümünü gizle, admin panelini göster.
       if(currentUser.admin) {
+        // Admin için hack kısmı gizlenir, admin paneli gösterilir.
         hackSection.classList.add("hidden");
         adminPanel.classList.remove("hidden");
-        adminMessage.textContent = "Admin olarak sisteme giriş yaptınız. Hack işlemi yapılamaz.";
       } else {
         hackSection.classList.remove("hidden");
         adminPanel.classList.add("hidden");
@@ -194,23 +196,25 @@
         snapshot.forEach(doc => {
           users.push({ username: doc.id, ...doc.data() });
         });
-        renderUsersList(users);
-        updateCurrentUserBalanceFromSnapshot(users);
-        if(!currentUser.admin) {
+        if(currentUser && currentUser.admin) {
+          renderAdminScoreboard(users);
+        } else {
+          renderUsersList(users);
+          updateCurrentUserBalanceFromSnapshot(users);
           updateHackTargetArea(users);
         }
       });
     }
 
-    /***** Kullanıcı Listesi Güncelleme *****/
+    /***** Kullanıcı Listesi (Normal) *****/
     function renderUsersList(users) {
       let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye (\$)</th><th>İşlem</th></tr>';
       users.forEach(u => {
         if(u.username !== currentUser.username) {
           html += `<tr>
                      <td>${u.username}</td>
-                     <td>${u.balance}</td>
-                     <td>${ currentUser.admin ? "" : `<button onclick="initHack('${u.username}')">Hackle (100\$)</button>` }</td>
+                     <td>${u.balance}${u.banned ? " (BAN)" : ""}</td>
+                     <td><button onclick="initHack('${u.username}')">Hackle (100\$)</button></td>
                    </tr>`;
         }
       });
@@ -218,7 +222,25 @@
       usersListDiv.innerHTML = html;
     }
 
-    /***** Hack Hedefi Seçim Alanı *****/
+    /***** Admin Scoreboard ve İşlemleri *****/
+    function renderAdminScoreboard(users) {
+      let html = '<table><tr><th>Kullanıcı Adı</th><th>Bakiye (\$)</th><th>Durum</th><th>Ceza Ver</th><th>Banla</th></tr>';
+      users.forEach(u => {
+        if(u.username !== currentUser.username) {
+          html += `<tr>
+                     <td>${u.username}</td>
+                     <td>${u.balance}</td>
+                     <td>${u.banned ? "Banlandı" : "Aktif"}</td>
+                     <td><button onclick="givePenalty('${u.username}')">Ceza (100\$)</button></td>
+                     <td>${u.banned ? "Zaten Banlı" : `<button onclick="banUser('${u.username}')">Banla</button>`}</td>
+                   </tr>`;
+        }
+      });
+      html += '</table>';
+      adminScoreboard.innerHTML = html;
+    }
+
+    /***** Hack Hedefi Seçim Alanı (Normal Kullanıcı) *****/
     function updateHackTargetArea(users = null) {
       if(!users) {
         db.collection("users").get().then(snapshot => {
@@ -260,8 +282,7 @@
       });
     }
 
-    /***** Hack İşlemleri *****/
-    // Normal kullanıcılar için hack moduna geçiş:
+    /***** Hack İşlemleri (Normal Kullanıcı) *****/
     function initHack(targetUsername) {
       if(currentUser.balance < 100) {
         simMessage.textContent = "Hackleme ücreti için yetersiz bakiye!";
@@ -311,7 +332,7 @@
       return array;
     }
 
-    // Firestore transaction kullanılarak hacker ve hedef hesapları güncelleniyor.
+    // Firestore transaction ile hacker ve hedef hesaplarını güncelliyoruz.
     async function processHackAnswer(selectedCode) {
       hideHackModal();
       simMessage.textContent = "İşlem yapılıyor...";
@@ -344,6 +365,33 @@
         });
       } catch (error) {
         simMessage.textContent = "İşlem başarısız: " + error;
+      }
+    }
+
+    /***** Admin İşlemleri: Ceza Verme & Banlama *****/
+    async function givePenalty(username) {
+      try {
+        const userRef = db.collection("users").doc(username);
+        await db.runTransaction(async (transaction) => {
+          const userDoc = await transaction.get(userRef);
+          if (!userDoc.exists) throw "Kullanıcı bulunamadı!";
+          let newBalance = userDoc.data().balance - 100;
+          if(newBalance < 0) newBalance = 0;
+          transaction.update(userRef, { balance: newBalance });
+        });
+        adminMessage.textContent = "Ceza başarıyla uygulandı.";
+      } catch (error) {
+        adminMessage.textContent = "Ceza uygulanamadı: " + error;
+      }
+    }
+
+    async function banUser(username) {
+      try {
+        const userRef = db.collection("users").doc(username);
+        await userRef.update({ banned: true });
+        adminMessage.textContent = "Kullanıcı başarıyla banlandı.";
+      } catch (error) {
+        adminMessage.textContent = "Ban işlemi başarısız: " + error;
       }
     }
   </script>
